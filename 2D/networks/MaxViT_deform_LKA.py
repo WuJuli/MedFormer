@@ -5,7 +5,7 @@ from einops.layers.torch import Rearrange
 from torch.nn import functional as F
 
 from networks.segformer import *
-#from segformer import *
+# from segformer import *
 
 ##################################
 #
@@ -25,6 +25,7 @@ class DWConvLKA(nn.Module):
     def forward(self, x):
         x = self.dwconv(x)
         return x
+
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0., linear=False):
@@ -97,12 +98,12 @@ class LKABlock(nn.Module):
                  act_layer=nn.GELU,
                  linear=False):
         super().__init__()
-        self.norm1 = nn.LayerNorm(dim) #build_norm_layer(norm_cfg, dim)[1]
+        self.norm1 = nn.LayerNorm(dim)  # build_norm_layer(norm_cfg, dim)[1]
         self.attn = SpatialAttention(dim)
         self.drop_path = DropPath(
             drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = nn.LayerNorm(dim) #build_norm_layer(norm_cfg, dim)[1]
+        self.norm2 = nn.LayerNorm(dim)  # build_norm_layer(norm_cfg, dim)[1]
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim,
                        act_layer=act_layer, drop=drop, linear=linear)
@@ -115,27 +116,27 @@ class LKABlock(nn.Module):
     def forward(self, x, H, W):
         B, N, C = x.shape
         x = x.permute(0, 2, 1).view(B, C, H, W)
-        y = x.permute(0,2,3,1) # b h w c, because norm requires this
+        y = x.permute(0, 2, 3, 1)  # b h w c, because norm requires this
         y = self.norm1(y)
-        y = y.permute(0, 3, 1, 2) # b c h w, because attn requieres this
+        y = y.permute(0, 3, 1, 2)  # b c h w, because attn requieres this
         y = self.attn(y)
         y = self.layer_scale_1.unsqueeze(-1).unsqueeze(-1) * y
         y = self.drop_path(y)
         x = x + y
-        #x = x + self.drop_path(self.layer_scale_1.unsqueeze(-1).unsqueeze(-1)
+        # x = x + self.drop_path(self.layer_scale_1.unsqueeze(-1).unsqueeze(-1)
         #                       * self.attn(self.norm1(x)))
 
-        y = x.permute(0,2,3,1) # b h w c, because norm requires this
+        y = x.permute(0, 2, 3, 1)  # b h w c, because norm requires this
         y = self.norm2(y)
-        y = y.permute(0, 3, 1, 2) # b c h w, because attn requieres this
+        y = y.permute(0, 3, 1, 2)  # b c h w, because attn requieres this
         y = self.mlp(y)
         y = self.layer_scale_2.unsqueeze(-1).unsqueeze(-1) * y
         y = self.drop_path(y)
         x = x + y
-        #x = x + self.drop_path(self.layer_scale_2.unsqueeze(-1).unsqueeze(-1)
+        # x = x + self.drop_path(self.layer_scale_2.unsqueeze(-1).unsqueeze(-1)
         #                       * self.mlp(self.norm2(x)))
         x = x.view(B, C, N).permute(0, 2, 1)
-        #print("LKA return shape: {}".format(x.shape))
+        # print("LKA return shape: {}".format(x.shape))
         return x
 
 
@@ -149,12 +150,12 @@ class deformableLKABlock(nn.Module):
                  act_layer=nn.GELU,
                  linear=False):
         super().__init__()
-        self.norm1 = nn.LayerNorm(dim) #build_norm_layer(norm_cfg, dim)[1]
+        self.norm1 = nn.LayerNorm(dim)  # build_norm_layer(norm_cfg, dim)[1]
         self.attn = deformable_LKA_Attention(dim)
         self.drop_path = DropPath(
             drop_path) if drop_path > 0. else nn.Identity()
 
-        self.norm2 = nn.LayerNorm(dim) #build_norm_layer(norm_cfg, dim)[1]
+        self.norm2 = nn.LayerNorm(dim)  # build_norm_layer(norm_cfg, dim)[1]
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim,
                        act_layer=act_layer, drop=drop, linear=linear)
@@ -165,29 +166,28 @@ class deformableLKABlock(nn.Module):
     def forward(self, x, H, W):
         B, N, C = x.shape
         x = x.permute(0, 2, 1).view(B, C, H, W)
-        y = x.permute(0,2,3,1) # b h w c, because norm requires this
+        y = x.permute(0, 2, 3, 1)  # b h w c, because norm requires this
         y = self.norm1(y)
-        y = y.permute(0, 3, 1, 2) # b c h w, because attn requieres this
+        y = y.permute(0, 3, 1, 2)  # b c h w, because attn requieres this
         y = self.attn(y)
         y = self.layer_scale_1.unsqueeze(-1).unsqueeze(-1) * y
         y = self.drop_path(y)
         x = x + y
-        #x = x + self.drop_path(self.layer_scale_1.unsqueeze(-1).unsqueeze(-1)
+        # x = x + self.drop_path(self.layer_scale_1.unsqueeze(-1).unsqueeze(-1)
         #                       * self.attn(self.norm1(x)))
 
-        y = x.permute(0,2,3,1) # b h w c, because norm requires this
+        y = x.permute(0, 2, 3, 1)  # b h w c, because norm requires this
         y = self.norm2(y)
-        y = y.permute(0, 3, 1, 2) # b c h w, because attn requieres this
+        y = y.permute(0, 3, 1, 2)  # b c h w, because attn requieres this
         y = self.mlp(y)
         y = self.layer_scale_2.unsqueeze(-1).unsqueeze(-1) * y
         y = self.drop_path(y)
         x = x + y
-        #x = x + self.drop_path(self.layer_scale_2.unsqueeze(-1).unsqueeze(-1)
+        # x = x + self.drop_path(self.layer_scale_2.unsqueeze(-1).unsqueeze(-1)
         #                       * self.mlp(self.norm2(x)))
         x = x.view(B, C, N).permute(0, 2, 1)
-        #print("LKA return shape: {}".format(x.shape))
+        # print("LKA return shape: {}".format(x.shape))
         return x
-
 
 
 ##################################
@@ -221,9 +221,9 @@ class Cross_Attention(nn.Module):
 
         attended_values = []
         for i in range(self.head_count):
-            key = F.softmax(keys[:, i * head_key_channels : (i + 1) * head_key_channels, :], dim=2)
-            query = F.softmax(queries[:, i * head_key_channels : (i + 1) * head_key_channels, :], dim=1)
-            value = values[:, i * head_value_channels : (i + 1) * head_value_channels, :]
+            key = F.softmax(keys[:, i * head_key_channels: (i + 1) * head_key_channels, :], dim=2)
+            query = F.softmax(queries[:, i * head_key_channels: (i + 1) * head_key_channels, :], dim=1)
+            value = values[:, i * head_value_channels: (i + 1) * head_value_channels, :]
             context = key @ value.transpose(1, 2)  # dk*dv
             attended_value = context.transpose(1, 2) @ query  # n*dv
             attended_values.append(attended_value)
@@ -309,11 +309,11 @@ class EfficientAttention(nn.Module):
 
         attended_values = []
         for i in range(self.head_count):
-            key = F.softmax(keys[:, i * head_key_channels : (i + 1) * head_key_channels, :], dim=2)
+            key = F.softmax(keys[:, i * head_key_channels: (i + 1) * head_key_channels, :], dim=2)
 
-            query = F.softmax(queries[:, i * head_key_channels : (i + 1) * head_key_channels, :], dim=1)
+            query = F.softmax(queries[:, i * head_key_channels: (i + 1) * head_key_channels, :], dim=1)
 
-            value = values[:, i * head_value_channels : (i + 1) * head_value_channels, :]
+            value = values[:, i * head_value_channels: (i + 1) * head_value_channels, :]
 
             context = key @ value.transpose(1, 2)  # dk*dv
             attended_value = (context.transpose(1, 2) @ query).reshape(n, head_value_channels, h, w)  # n*dv
@@ -413,7 +413,7 @@ class DualTransformerBlock(nn.Module):
         mlp2 = self.mlp2(norm4, H, W)
 
         mx = add3 + mlp2
-        #print("Dual transformer return shape: {}".format(mx.shape))
+        # print("Dual transformer return shape: {}".format(mx.shape))
         return mx
 
 
@@ -534,7 +534,7 @@ class FinalPatchExpand_X4(nn.Module):
 
         x = x.view(B, H, W, C)
         x = rearrange(
-            x, "b h w (p1 p2 c)-> b (h p1) (w p2) c", p1=self.dim_scale, p2=self.dim_scale, c=C // (self.dim_scale**2)
+            x, "b h w (p1 p2 c)-> b (h p1) (w p2) c", p1=self.dim_scale, p2=self.dim_scale, c=C // (self.dim_scale ** 2)
         )
         x = x.view(B, -1, self.output_dim)
         x = self.norm(x.clone())
@@ -544,7 +544,7 @@ class FinalPatchExpand_X4(nn.Module):
 
 class MyDecoderLayer(nn.Module):
     def __init__(
-        self, input_size, in_out_chan, head_count, token_mlp_mode, n_class=9, norm_layer=nn.LayerNorm, is_last=False
+            self, input_size, in_out_chan, head_count, token_mlp_mode, n_class=9, norm_layer=nn.LayerNorm, is_last=False
     ):
         super().__init__()
         dims = in_out_chan[0]
@@ -552,34 +552,19 @@ class MyDecoderLayer(nn.Module):
         key_dim = in_out_chan[2]
         value_dim = in_out_chan[3]
         x1_dim = in_out_chan[4]
-        #print("Dim: {} | Out_dim: {} | Key_dim: {} | Value_dim: {} | X1_dim: {}".format(dims, out_dim, key_dim, value_dim, x1_dim))
+
         if not is_last:
             self.x1_linear = nn.Linear(x1_dim, out_dim)
-            #self.lka_attn = LKABlock(dim=dims) # TODO: Further input parameters here
-            #self.cross_attn = CrossAttentionBlock( # Skip connection block
-            #    dims, key_dim, value_dim, input_size[0], input_size[1], head_count, token_mlp_mode
-            #)
-            #self.concat_linear = nn.Linear(2 * dims, out_dim)
-            # transformer decoder
             self.layer_up = PatchExpand(input_resolution=input_size, dim=out_dim, dim_scale=2, norm_layer=norm_layer)
             self.last_layer = None
         else:
             self.x1_linear = nn.Linear(x1_dim, out_dim)
-            #self.lka_attn = LKABlock(dim=dims) # TODO: Further input parameters here
-            #self.cross_attn = CrossAttentionBlock( # Skip connection block
-            #    dims * 2, key_dim, value_dim, input_size[0], input_size[1], head_count, token_mlp_mode
-            #)
-            #self.concat_linear = nn.Linear(4 * dims, out_dim)
+
             # transformer decoder
             self.layer_up = FinalPatchExpand_X4(
                 input_resolution=input_size, dim=out_dim, dim_scale=4, norm_layer=norm_layer
             )
             self.last_layer = nn.Conv2d(out_dim, n_class, 1)
-
-        #self.layer_former_1 = DualTransformerBlock(out_dim, key_dim, value_dim, head_count, token_mlp_mode)
-        self.layer_lka_1 = deformableLKABlock(dim=out_dim) # TODO
-        #self.layer_former_2 = DualTransformerBlock(out_dim, key_dim, value_dim, head_count, token_mlp_mode)
-        self.layer_lka_2 = deformableLKABlock(dim=out_dim) # TODO
 
         def init_weights(self):
             for m in self.modules():
@@ -599,24 +584,20 @@ class MyDecoderLayer(nn.Module):
 
     def forward(self, x1, x2=None):
         if x2 is not None:  # skip connection exist
-            b, h, w, c = x2.shape # 1 28 28 320, 1 56 56 128
-            x2 = x2.view(b, -1, c) # 1 784 320, 1 3136 128
-            x1_expand = self.x1_linear(x1) # 1 784 256 --> 1 784 320, 1 3136 160 --> 1 3136 128
-            
-            #cat_linear_x = self.concat_linear(self.cross_attn(x1_expand, x2)) # 1 784 320, 1 3136 128
-            cat_linear_x = x1_expand + x2 # Simply add them in the first step. TODO: Add more complex skip connection here
+            b, h, w, c = x2.shape  # 1 28 28 320, 1 56 56 128
+            x2 = x2.view(b, -1, c)  # 1 784 320, 1 3136 128
+            x1_expand = self.x1_linear(x1)  # 1 784 256 --> 1 784 320, 1 3136 160 --> 1 3136 128
 
-            #tran_layer_1 = self.layer_former_1(cat_linear_x, h, w) # 1 784 320, 1 3136 128
-            tran_layer_1 = self.layer_lka_1(cat_linear_x, h, w)
-            #tran_layer_2 = self.layer_former_2(tran_layer_1, h, w) # 1 784 320, 1 3136 128
-            tran_layer_2 = self.layer_lka_2(tran_layer_1, h, w) #self.layer_lka_1(tran_layer_1, h, w) # Here has to be a 2! LEON CHANGE THIS!!!!
+            cat_linear_x = x1_expand + x2  # Simply add them in the first step. TODO: Add more complex skip connection here
 
             if self.last_layer:
-                out = self.last_layer(self.layer_up(tran_layer_2).view(b, 4 * h, 4 * w, -1).permute(0, 3, 1, 2)) # 1 9 224 224
+                out = self.last_layer(
+                    self.layer_up(cat_linear_x).view(b, 4 * h, 4 * w, -1).permute(0, 3, 1, 2))  # 1 9 224 224
             else:
-                out = self.layer_up(tran_layer_2) # 1 3136 160
+                out = self.layer_up(cat_linear_x)  # 1 3136 160
         else:
             out = self.layer_up(x1)
+
         return out
 
 
@@ -625,10 +606,8 @@ class MyDecoderLayer(nn.Module):
 # MaxViT stuff
 #
 ##########################################
-#from merit_lib.networks import MaxViT4Out_Small, MaxViT4Out_Small3D
+# from merit_lib.networks import MaxViT4Out_Small, MaxViT4Out_Small3D
 from networks.merit_lib.networks import MaxViT4Out_Small
-
-
 
 
 class MaxViT_deformableLKAFormer(nn.Module):
@@ -684,6 +663,10 @@ class MaxViT_deformableLKAFormer(nn.Module):
             x = x.repeat(1, 3, 1, 1)
 
         output_enc_3, output_enc_2, output_enc_1, output_enc_0 = self.backbone(x)
+        #
+        # print(output_enc_3.shape, output_enc_2.shape, output_enc_1.shape, output_enc_0.shape)
+        # print(
+        #     "torch.Size([20, 768, 7, 7]) torch.Size([20, 384, 14, 14]) torch.Size([20, 192, 28, 28]) torch.Size([20, 96, 56, 56])")
 
         b, c, _, _ = output_enc_3.shape
 
@@ -693,13 +676,17 @@ class MaxViT_deformableLKAFormer(nn.Module):
         tmp_1 = self.decoder_1(tmp_2, output_enc_1.permute(0, 2, 3, 1))
         tmp_0 = self.decoder_0(tmp_1, output_enc_0.permute(0, 2, 3, 1))
 
+        # print(tmp_3.shape, tmp_2.shape, tmp_1.shape, tmp_0.shape)
+        # torch.Size([20, 196, 384])
+        # torch.Size([20, 784, 192])
+        # torch.Size([20, 3136, 96])
+        # torch.Size([20, 9, 224, 224])
+
         return tmp_0
 
 
 if __name__ == "__main__":
-    
-
-    input = torch.rand((2,3,224,224)).cuda(0)
+    input = torch.rand((2, 3, 224, 224)).cuda(0)
 
     net = MaxViT_deformableLKAFormer().cuda(0)
 

@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import datetime
 
+
 def inference(model, testloader, args, test_save_path=None):
     model.eval()
     metric_list = 0.0
@@ -29,48 +30,49 @@ def inference(model, testloader, args, test_save_path=None):
     for i_batch, sampled_batch in tqdm(enumerate(testloader)):
         h, w = sampled_batch["image"].size()[2:]
         image, label, case_name = sampled_batch["image"], sampled_batch["label"], sampled_batch['case_name'][0]
-        metric_i = test_single_volume(image, label, model, classes=args.num_classes, patch_size=[args.img_size, args.img_size],
+        metric_i = test_single_volume(image, label, model, classes=args.num_classes,
+                                      patch_size=[args.img_size, args.img_size],
                                       test_save_path=test_save_path, case=case_name, z_spacing=args.z_spacing)
         metric_list += np.array(metric_i)
-        logging.info(' idx %d case %s mean_dice %f mean_hd95 %f' % (i_batch, case_name, np.mean(metric_i, axis=0)[0], np.mean(metric_i, axis=0)[1]))
-    
+        logging.info(' idx %d case %s mean_dice %f mean_hd95 %f' % (
+        i_batch, case_name, np.mean(metric_i, axis=0)[0], np.mean(metric_i, axis=0)[1]))
+
     metric_list = metric_list / len(testloader.dataset)
-    
+
     for i in range(1, args.num_classes):
-        logging.info('Mean class %d mean_dice %f mean_hd95 %f' % (i, metric_list[i-1][0], metric_list[i-1][1]))
-    
+        logging.info('Mean class %d mean_dice %f mean_hd95 %f' % (i, metric_list[i - 1][0], metric_list[i - 1][1]))
+
     performance = np.mean(metric_list, axis=0)[0]
     mean_hd95 = np.mean(metric_list, axis=0)[1]
-    
+
     logging.info('Testing performance in best val model: mean_dice : %f mean_hd95 : %f' % (performance, mean_hd95))
-    
+
     return performance, mean_hd95
 
 
-def plot_result(dice, h, snapshot_path,args):
-    dict = {'mean_dice': dice, 'mean_hd95': h} 
+def plot_result(dice, h, snapshot_path, args):
+    dict = {'mean_dice': dice, 'mean_hd95': h}
     df = pd.DataFrame(dict)
     plt.figure(0)
     df['mean_dice'].plot()
     resolution_value = 1200
     plt.title('Mean Dice')
     date_and_time = datetime.datetime.now()
-    filename = f'{args.model_name}_' + str(date_and_time)+'dice'+'.png'
+    filename = f'{args.model_name}_' + str(date_and_time) + 'dice' + '.png'
     save_mode_path = os.path.join(snapshot_path, filename)
     plt.savefig(save_mode_path, format="png", dpi=resolution_value)
     plt.figure(1)
     df['mean_hd95'].plot()
     plt.title('Mean hd95')
-    filename = f'{args.model_name}_' + str(date_and_time)+'hd95'+'.png'
+    filename = f'{args.model_name}_' + str(date_and_time) + 'hd95' + '.png'
     save_mode_path = os.path.join(snapshot_path, filename)
-    #save csv 
-    filename = f'{args.model_name}_' + str(date_and_time)+'results'+'.csv'
+    # save csv
+    filename = f'{args.model_name}_' + str(date_and_time) + 'results' + '.csv'
     save_mode_path = os.path.join(snapshot_path, filename)
     df.to_csv(save_mode_path, sep='\t')
 
 
 def trainer_synapse(args, model, snapshot_path):
-
     os.makedirs(os.path.join(snapshot_path, 'test'), exist_ok=True)
     test_save_path = os.path.join(snapshot_path, 'test')
 
@@ -91,14 +93,16 @@ def trainer_synapse(args, model, snapshot_path):
     ])
     y_transforms = transforms.ToTensor()
 
-    db_train = Synapse_dataset(base_dir=args.root_path, list_dir=args.list_dir, split="train",img_size=args.img_size,
-                               norm_x_transform = x_transforms, norm_y_transform = y_transforms)
+    db_train = Synapse_dataset(base_dir=args.root_path, list_dir=args.list_dir, split="train", img_size=args.img_size,
+                               norm_x_transform=x_transforms, norm_y_transform=y_transforms)
 
     print("The length of train set is: {}".format(len(db_train)))
+
     def worker_init_fn(worker_id):
         random.seed(args.seed + worker_id)
 
-    trainloader = DataLoader(db_train, batch_size=batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True,
+    trainloader = DataLoader(db_train, batch_size=batch_size, shuffle=True, num_workers=args.num_workers,
+                             pin_memory=True,
                              worker_init_fn=worker_init_fn)
 
     db_test = Synapse_dataset(base_dir=args.test_path, split="test_vol", list_dir=args.list_dir, img_size=args.img_size)
@@ -112,7 +116,7 @@ def trainer_synapse(args, model, snapshot_path):
     ce_loss = CrossEntropyLoss()
     dice_loss = DiceLoss(num_classes)
     optimizer = optim.SGD(model.parameters(), lr=base_lr, momentum=0.9, weight_decay=0.0001)
-    #optimizer = optim.AdamW(model.parameters(),lr=base_lr, weight_decay=0.0001)
+    # optimizer = optim.AdamW(model.parameters(),lr=base_lr, weight_decay=0.0001)
     writer = SummaryWriter(snapshot_path + '/log')
     iter_num = 0
     max_epoch = args.max_epochs
@@ -121,8 +125,8 @@ def trainer_synapse(args, model, snapshot_path):
 
     best_performance = 0.0
     iterator = tqdm(range(max_epoch), ncols=70)
-    dice_=[]
-    hd95_= []
+    dice_ = []
+    hd95_ = []
     acc_loss = 0.0
     acc_loss_ce = 0.0
     acc_loss_dc = 0.0
@@ -159,7 +163,8 @@ def trainer_synapse(args, model, snapshot_path):
                 acc_loss = acc_loss / 100
                 acc_loss_ce = acc_loss_ce / 100
                 acc_loss_dc = acc_loss_dc / 100
-                logging.info('iteration %d : loss : %f, loss_ce: %f, loss_dice: %f' % (iter_num, acc_loss, acc_loss_ce, acc_loss_dc))
+                logging.info('iteration %d : loss : %f, loss_ce: %f, loss_dice: %f' % (
+                iter_num, acc_loss, acc_loss_ce, acc_loss_dc))
                 acc_loss = 0.0
                 acc_loss_ce = 0.0
                 acc_loss_dc = 0.0
@@ -173,15 +178,14 @@ def trainer_synapse(args, model, snapshot_path):
                 labs = label_batch[1, ...].unsqueeze(0) * 50
                 writer.add_image('train/GroundTruth', labs, iter_num)
 
-
         # Test
-        eval_interval = args.eval_interval 
-        if epoch_num >= int(max_epoch / 2) and (epoch_num + 1) % eval_interval == 0:
+        eval_interval = args.eval_interval
+        if (epoch_num + 1) % eval_interval == 0:
             filename = f'{args.model_name}_seed_{args.seed}_epoch_{epoch_num}.pth'
             save_mode_path = os.path.join(snapshot_path, filename)
             torch.save(model.state_dict(), save_mode_path)
             logging.info("save model to {}".format(save_mode_path))
-            
+
             logging.info("*" * 20)
             logging.info(f"Running Inference after epoch {epoch_num}")
             print(f"Epoch {epoch_num}")
@@ -195,7 +199,7 @@ def trainer_synapse(args, model, snapshot_path):
             save_mode_path = os.path.join(snapshot_path, filename)
             torch.save(model.state_dict(), save_mode_path)
             logging.info("save model to {}".format(save_mode_path))
-            
+
             if not (epoch_num + 1) % args.eval_interval == 0:
                 logging.info("*" * 20)
                 logging.info(f"Running Inference after epoch {epoch_num} (Last Epoch)")
@@ -204,10 +208,10 @@ def trainer_synapse(args, model, snapshot_path):
                 dice_.append(mean_dice)
                 hd95_.append(mean_hd95)
                 model.train()
-                
+
             iterator.close()
             break
-            
+
     plot_result(dice_, hd95_, snapshot_path, args)
     writer.close()
     return "Training Finished!"
