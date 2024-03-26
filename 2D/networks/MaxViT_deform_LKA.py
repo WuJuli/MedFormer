@@ -608,9 +608,51 @@ class OutConv(nn.Module):
 ##########################################
 # from merit_lib.networks import MaxViT4Out_Small, MaxViT4Out_Small3D
 from networks.merit_lib.networks import MaxViT4Out_Small
+from networks.merit_lib.networks import MaxViT4Out
 
 
-class MaxViT_deformableLKAFormer(nn.Module):
+class MaxViT_Tiny_deformableLKAFormer(nn.Module):
+    def __init__(self, num_classes=9, head_count=1, token_mlp_mode="mix_skip"):
+        super().__init__()
+
+        # Encoder pretrained tiny
+        self.encoder = MaxViT4Out(n_class=num_classes, img_size=224, model_scale='tiny')
+
+        # Decoder
+        in_out_chan = [
+            [64, 64, 64, 64, 64],
+            [128, 128, 128, 128, 128],
+            [256, 256, 256, 256, 256],
+            [512, 512, 512, 512, 512],
+        ]  # [dim, out_dim, key_dim, value_dim, x2_dim]
+
+        self.my_decoder_0 = Up(in_channels=in_out_chan[3][0], bilinear=True, linear=True)
+        self.my_decoder_1 = Up(in_channels=in_out_chan[2][0], bilinear=True, linear=True)
+        self.my_decoder_2 = Up(in_channels=in_out_chan[1][0], bilinear=True, linear=True)
+        self.outConv = OutConv(in_channels=in_out_chan[0][0], num_class=9)
+
+    def forward(self, x):
+        # ---------------Encoder-------------------------
+        if x.size()[1] == 1:
+            x = x.repeat(1, 3, 1, 1)
+
+        output_enc_3, output_enc_2, output_enc_1, output_enc_0 = self.encoder(x)
+
+        # print(output_enc_3.shape, output_enc_2.shape, output_enc_1.shape, output_enc_0.shape)
+        # torch.Size([20, 512, 7, 7]) torch.Size([20, 256, 14, 14]) torch.Size([20, 128, 28, 28]) torch.Size([20, 64, 56, 56])
+        # ---------------Decoder-------------------------
+        b, c, _, _ = output_enc_3.shape
+        temp_3 = self.my_decoder_0(output_enc_3, output_enc_2)
+        temp_2 = self.my_decoder_1(temp_3, output_enc_1)
+        temp_1 = self.my_decoder_2(temp_2, output_enc_0)
+        temp_0 = self.outConv(temp_1)
+
+        # torch.Size([20, 256, 14, 14]) torch.Size([20, 128, 28, 28]) torch.Size([20, 64, 56, 56]) torch.Size([20, 9, 224, 224])
+
+        return temp_0
+
+
+class MaxViT_Small_deformableLKAFormer(nn.Module):
     def __init__(self, num_classes=9, head_count=1, token_mlp_mode="mix_skip"):
         super().__init__()
 

@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 torch.set_num_threads(2)
-from networks.MaxViT_deform_LKA import MaxViT_deformableLKAFormer
+from networks.MaxViT_deform_LKA import MaxViT_Tiny_deformableLKAFormer
 from trainer_MaxViT_deform_LKA import trainer_synapse
 
 from fvcore.nn import FlopCountAnalysis
@@ -117,7 +117,7 @@ if __name__ == "__main__":
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-    net = MaxViT_deformableLKAFormer().cuda(0)
+    net = MaxViT_Tiny_deformableLKAFormer().cuda(0)
 
     input = torch.rand((1, 3, 224, 224)).cuda(0)
     n_parameters = sum(p.numel() for p in net.parameters() if p.requires_grad)

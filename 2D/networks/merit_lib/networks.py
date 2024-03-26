@@ -35,23 +35,23 @@ def np2th(weights, conv=False):
 
 
 def load_pretrained_weights(img_size, model_scale):
-    if (model_scale == 'tiny'):
+    if model_scale == 'tiny':
         if img_size == 224:
             backbone = maxvit_tiny_rw_224_4out()  # [64, 128, 320, 512]
             print('Loading:', './pretrained_pth/maxvit/maxvit_tiny_rw_224_sw-7d0dffeb.pth')
             state_dict = torch.load('./pretrained_pth/maxvit/maxvit_tiny_rw_224_sw-7d0dffeb.pth')
-        elif (img_size == 256):
+        elif img_size == 256:
             backbone = maxvit_rmlp_tiny_rw_256_4out()
             print('Loading:', './pretrained_pth/maxvit/maxvit_rmlp_tiny_rw_256_sw-bbef0ff5.pth')
             state_dict = torch.load('./pretrained_pth/maxvit/maxvit_rmlp_tiny_rw_256_sw-bbef0ff5.pth')
         else:
             sys.exit(str(img_size) + " is not a valid image size! Currently supported image sizes are 224 and 256.")
-    elif (model_scale == 'small'):
+    elif model_scale == 'small':
         if img_size == 224:
             backbone = maxvit_rmlp_small_rw_224_4out()  # [64, 128, 320, 512]
             print('Loading:', './pretrained_pth/maxvit/maxvit_rmlp_small_rw_224_sw-6ef0ae4f.pth')
             state_dict = torch.load('./pretrained_pth/maxvit/maxvit_rmlp_small_rw_224_sw-6ef0ae4f.pth')
-        elif (img_size == 256):
+        elif img_size == 256:
             backbone = maxxvit_rmlp_small_rw_256_4out()
             print('Loading:', './pretrained_pth/maxvit/maxxvit_rmlp_small_rw_256_sw-37e217ff.pth')
             state_dict = torch.load('./pretrained_pth/maxvit/maxxvit_rmlp_small_rw_256_sw-37e217ff.pth')
@@ -82,9 +82,9 @@ class MaxViT(nn.Module):
         # backbone network initialization with pretrained weight
         self.backbone = load_pretrained_weights(img_size, model_scale)
 
-        if (model_scale == 'tiny'):
+        if model_scale == 'tiny':
             self.channels = [512, 256, 128, 64]
-        elif (model_scale == 'small'):
+        elif model_scale == 'small':
             self.channels = [768, 384, 192, 96]
 
         # Prediction heads initialization
@@ -191,12 +191,6 @@ class MaxViT4Out(nn.Module):
         elif model_scale == 'small':
             self.channels = [768, 384, 192, 96]
 
-            # Prediction heads initialization
-        self.out_head1 = nn.Conv2d(self.channels[0], self.n_class, 1)
-        self.out_head2 = nn.Conv2d(self.channels[1], self.n_class, 1)
-        self.out_head3 = nn.Conv2d(self.channels[2], self.n_class, 1)
-        self.out_head4 = nn.Conv2d(self.channels[3], self.n_class, 1)
-
     def forward(self, x):
 
         # if grayscale input, convert to 3 channels
@@ -206,26 +200,9 @@ class MaxViT4Out(nn.Module):
         # transformer backbone as encoder
         f = self.backbone(x)
 
-        # print([f[3].shape,f[2].shape,f[1].shape,f[0].shape])
-
         x1_o, x2_o, x3_o, x4_o = f[3], f[2], f[1], f[0]
 
-        # prediction heads  
-        p1 = self.out_head1(x1_o)
-        p2 = self.out_head2(x2_o)
-        p3 = self.out_head3(x3_o)
-        p4 = self.out_head4(x4_o)
-
-        # print([p1.shape,p2.shape,p3.shape,p4.shape])
-
-        p1 = F.interpolate(p1, scale_factor=32, mode='bilinear')
-        p2 = F.interpolate(p2, scale_factor=16, mode='bilinear')
-        p3 = F.interpolate(p3, scale_factor=8, mode='bilinear')
-        p4 = F.interpolate(p4, scale_factor=4, mode='bilinear')
-
-        # print([p1.shape,p2.shape,p3.shape,p4.shape])
-
-        return p1, p2, p3, p4
+        return x1_o, x2_o, x3_o, x4_o
 
 
 class MaxViT4Out_Small(nn.Module):
@@ -247,7 +224,7 @@ class MaxViT4Out_Small(nn.Module):
             if pretrain:
                 print('Loading:', './pretrained_pth/maxvit/maxvit_rmlp_small_rw_224_sw-6ef0ae4f.pth')
                 state_dict = torch.load('./pretrained_pth/maxvit/maxvit_rmlp_small_rw_224_sw-6ef0ae4f.pth')
-        elif (img_size == 256):
+        elif img_size == 256:
             self.backbone = maxxvit_rmlp_small_rw_256_4out()
             print('Loading:', './pretrained_pth/maxvit/maxxvit_rmlp_small_rw_256_sw-37e217ff.pth')
             state_dict = torch.load('./pretrained_pth/maxvit/maxxvit_rmlp_small_rw_256_sw-37e217ff.pth')
