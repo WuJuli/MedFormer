@@ -484,39 +484,9 @@ class MiT(nn.Module):
         return outs
 
 
-# Decoder
-class PatchExpand(nn.Module):
-    def __init__(self, input_resolution, dim, dim_scale=2, norm_layer=nn.LayerNorm):
+class FinalPatchExpand(nn.Module):
+    def __init__(self, dim, dim_scale=4, norm_layer=nn.LayerNorm):
         super().__init__()
-        self.input_resolution = input_resolution
-        self.dim = dim
-        self.expand = nn.Linear(dim, 2 * dim, bias=False) if dim_scale == 2 else nn.Identity()
-        self.norm = norm_layer(dim // dim_scale)
-
-    def forward(self, x):
-        """
-        x: B, H*W, C
-        """
-        # print("x_shape-----",x.shape)
-        H, W = self.input_resolution
-        x = self.expand(x)
-
-        B, L, C = x.shape
-        # print(x.shape)
-        assert L == H * W, "input feature has wrong size"
-
-        x = x.view(B, H, W, C)
-        x = rearrange(x, "b h w (p1 p2 c)-> b (h p1) (w p2) c", p1=2, p2=2, c=C // 4)
-        x = x.view(B, -1, C // 4)
-        x = self.norm(x.clone())
-
-        return x
-
-
-class FinalPatchExpand_X4(nn.Module):
-    def __init__(self, input_resolution, dim, dim_scale=4, norm_layer=nn.LayerNorm):
-        super().__init__()
-        self.input_resolution = input_resolution
         self.dim = dim
         self.dim_scale = dim_scale
         self.expand = nn.Linear(dim, 16 * dim, bias=False)
@@ -525,80 +495,110 @@ class FinalPatchExpand_X4(nn.Module):
 
     def forward(self, x):
         """
-        x: B, H*W, C
+        x: B, C, H, W
         """
-        H, W = self.input_resolution
-        x = self.expand(x)
-        B, L, C = x.shape
-        assert L == H * W, "input feature has wrong size"
+        B, C, H, W = x.shape
+        x = self.expand(x.permute(0, 2, 3, 1))
 
-        x = x.view(B, H, W, C)
         x = rearrange(
-            x, "b h w (p1 p2 c)-> b (h p1) (w p2) c", p1=self.dim_scale, p2=self.dim_scale, c=C // (self.dim_scale ** 2)
+            x, "b h w (p1 p2 c)-> b (h p1) (w p2) c", p1=self.dim_scale, p2=self.dim_scale,
+            c=C, h=H, w=W
         )
         x = x.view(B, -1, self.output_dim)
         x = self.norm(x.clone())
+        x = rearrange(x, "b (h w) c-> b c h w", h=H * self.dim_scale, w=W * self.dim_scale)  # B, C, H, W
 
         return x
 
 
-class MyDecoderLayer(nn.Module):
-    def __init__(
-            self, input_size, in_out_chan, head_count, token_mlp_mode, n_class=9, norm_layer=nn.LayerNorm, is_last=False
-    ):
+class PatchMerging(nn.Module):
+    r""" Patch Merging Layer.
+    Args:
+        input_resolution (tuple[int]): Resolution of input feature.
+        dim (int): Number of input channels.
+        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
+    """
+
+    def __init__(self, image_size, dim, norm_layer=nn.LayerNorm):
         super().__init__()
-        dims = in_out_chan[0]
-        out_dim = in_out_chan[1]
-        key_dim = in_out_chan[2]
-        value_dim = in_out_chan[3]
-        x1_dim = in_out_chan[4]
+        self.image_size = image_size
+        self.dim = dim
+        self.reduction = nn.Linear(4 * dim, dim, bias=False)
+        self.norm = norm_layer(4 * dim)
 
-        if not is_last:
-            self.x1_linear = nn.Linear(x1_dim, out_dim)
-            self.layer_up = PatchExpand(input_resolution=input_size, dim=out_dim, dim_scale=2, norm_layer=norm_layer)
-            self.last_layer = None
+    def forward(self, x):
+        """
+        x: B, C, H, W
+        """
+        B, C, H, W = x.shape
+        x = x.permute(0, 2, 3, 1)  # B, H, W, C
+
+        x0 = x[:, 0::2, 0::2, :]  # B H/2 W/2 C
+        x1 = x[:, 1::2, 0::2, :]  # B H/2 W/2 C
+        x2 = x[:, 0::2, 1::2, :]  # B H/2 W/2 C
+        x3 = x[:, 1::2, 1::2, :]  # B H/2 W/2 C
+        x = torch.cat([x0, x1, x2, x3], -1)  # B H/2 W/2 4*C
+        x = x.view(B, -1, 4 * C)  # B H/2*W/2 4*C
+
+        x = self.norm(x)
+        x = self.reduction(x)
+
+        return x
+
+    def extra_repr(self) -> str:
+        return f"input_resolution={self.input_resolution}, dim={self.dim}"
+
+    def flops(self):
+        H, W = self.input_resolution
+        flops = H * W * self.dim
+        flops += (H // 2) * (W // 2) * 4 * self.dim * 2 * self.dim
+        return flops
+
+
+class Up(nn.Module):
+    def __init__(self, in_channels, out_channels=None, bilinear=True, linear=True):
+        super(Up, self).__init__()
+        if bilinear:
+            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         else:
-            self.x1_linear = nn.Linear(x1_dim, out_dim)
-
-            # transformer decoder
-            self.layer_up = FinalPatchExpand_X4(
-                input_resolution=input_size, dim=out_dim, dim_scale=4, norm_layer=norm_layer
-            )
-            self.last_layer = nn.Conv2d(out_dim, n_class, 1)
-
-        def init_weights(self):
-            for m in self.modules():
-                if isinstance(m, nn.Linear):
-                    nn.init.xavier_uniform_(m.weight)
-                    if m.bias is not None:
-                        nn.init.zeros_(m.bias)
-                elif isinstance(m, nn.LayerNorm):
-                    nn.init.ones_(m.weight)
-                    nn.init.zeros_(m.bias)
-                elif isinstance(m, nn.Conv2d):
-                    nn.init.xavier_uniform_(m.weight)
-                    if m.bias is not None:
-                        nn.init.zeros_(m.bias)
-
-        init_weights(self)
-
-    def forward(self, x1, x2=None):
-        if x2 is not None:  # skip connection exist
-            b, h, w, c = x2.shape  # 1 28 28 320, 1 56 56 128
-            x2 = x2.view(b, -1, c)  # 1 784 320, 1 3136 128
-            x1_expand = self.x1_linear(x1)  # 1 784 256 --> 1 784 320, 1 3136 160 --> 1 3136 128
-
-            cat_linear_x = x1_expand + x2  # Simply add them in the first step. TODO: Add more complex skip connection here
-
-            if self.last_layer:
-                out = self.last_layer(
-                    self.layer_up(cat_linear_x).view(b, 4 * h, 4 * w, -1).permute(0, 3, 1, 2))  # 1 9 224 224
-            else:
-                out = self.layer_up(cat_linear_x)  # 1 3136 160
+            self.up = nn.ConvTranspose2d(in_channels, in_channels, kernel_size=2, stride=2)
+        self.linear = linear
+        if linear:
+            self.up_channel_1 = nn.Linear(in_channels, in_channels // 2, bias=False)
+            self.up_channel_2 = nn.Linear(in_channels, in_channels // 2, bias=False)
         else:
-            out = self.layer_up(x1)
+            self.conv1 = nn.Conv2d(in_channels, in_channels // 2, kernel_size=1)
+            self.conv2 = nn.Conv2d(in_channels, in_channels // 2, kernel_size=1)
 
-        return out
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+        x1 = self.up(x1)
+        if self.linear:
+            x1 = self.up_channel_1(x1.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)  # b, h, w, c -> b, c, h, w
+        else:
+            x1 = self.conv1(x1)
+
+        x = torch.cat([x2, x1], dim=1)
+
+        if self.linear:
+            x = self.up_channel_2(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)  # b, h, w, c -> b, c, h, w
+        else:
+            x = self.conv2(x)
+
+        return x
+
+
+class OutConv(nn.Module):
+    def __init__(self, in_channels, num_class=9):
+        super(OutConv, self).__init__()
+        self.linear = nn.Linear(in_channels, in_channels)
+        self.PE = FinalPatchExpand(dim=in_channels)
+        self.last_layer = nn.Conv2d(in_channels, num_class, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.linear(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        x = self.PE(x)
+        x = self.last_layer(x)
+        return x
 
 
 ##########################################
@@ -615,10 +615,9 @@ class MaxViT_deformableLKAFormer(nn.Module):
         super().__init__()
 
         # Encoder
-        self.backbone = MaxViT4Out_Small(n_class=num_classes, img_size=224)
+        self.encoder = MaxViT4Out_Small(n_class=num_classes, img_size=224, pretrain=False)
 
         # Decoder
-        d_base_feat_size = 7  # 16 for 512 input size, and 7 for 224
         in_out_chan = [
             [96, 96, 96, 96, 96],
             [192, 192, 192, 192, 192],
@@ -626,55 +625,27 @@ class MaxViT_deformableLKAFormer(nn.Module):
             [768, 768, 768, 768, 768],
         ]  # [dim, out_dim, key_dim, value_dim, x2_dim]
 
-        self.decoder_3 = MyDecoderLayer(
-            (d_base_feat_size, d_base_feat_size),
-            in_out_chan[3],
-            head_count,
-            token_mlp_mode,
-            n_class=num_classes,
-        )
-
-        self.decoder_2 = MyDecoderLayer(
-            (d_base_feat_size * 2, d_base_feat_size * 2),
-            in_out_chan[2],
-            head_count,
-            token_mlp_mode,
-            n_class=num_classes,
-        )
-        self.decoder_1 = MyDecoderLayer(
-            (d_base_feat_size * 4, d_base_feat_size * 4),
-            in_out_chan[1],
-            head_count,
-            token_mlp_mode,
-            n_class=num_classes,
-        )
-        self.decoder_0 = MyDecoderLayer(
-            (d_base_feat_size * 8, d_base_feat_size * 8),
-            in_out_chan[0],
-            head_count,
-            token_mlp_mode,
-            n_class=num_classes,
-            is_last=True,
-        )
+        self.my_decoder_0 = Up(in_channels=in_out_chan[3][0], bilinear=False, linear=True)
+        self.my_decoder_1 = Up(in_channels=in_out_chan[2][0], bilinear=False, linear=True)
+        self.my_decoder_2 = Up(in_channels=in_out_chan[1][0], bilinear=False, linear=True)
+        self.outConv = OutConv(in_channels=in_out_chan[0][0], num_class=9)
 
     def forward(self, x):
         # ---------------Encoder-------------------------
         if x.size()[1] == 1:
             x = x.repeat(1, 3, 1, 1)
 
-        output_enc_3, output_enc_2, output_enc_1, output_enc_0 = self.backbone(x)
-        #
+        output_enc_3, output_enc_2, output_enc_1, output_enc_0 = self.encoder(x)
+
         # print(output_enc_3.shape, output_enc_2.shape, output_enc_1.shape, output_enc_0.shape)
         # print(
-        #     "torch.Size([20, 768, 7, 7]) torch.Size([20, 384, 14, 14]) torch.Size([20, 192, 28, 28]) torch.Size([20, 96, 56, 56])")
-
-        b, c, _, _ = output_enc_3.shape
-
+        # "torch.Size([20, 768, 7, 7]) torch.Size([20, 384, 14, 14]) torch.Size([20, 192, 28, 28]) torch.Size([20, 96, 56, 56])")
         # ---------------Decoder-------------------------
-        tmp_3 = self.decoder_3(output_enc_3.permute(0, 2, 3, 1).view(b, -1, c))
-        tmp_2 = self.decoder_2(tmp_3, output_enc_2.permute(0, 2, 3, 1))
-        tmp_1 = self.decoder_1(tmp_2, output_enc_1.permute(0, 2, 3, 1))
-        tmp_0 = self.decoder_0(tmp_1, output_enc_0.permute(0, 2, 3, 1))
+        b, c, _, _ = output_enc_3.shape
+        temp_3 = self.my_decoder_0(output_enc_3, output_enc_2)
+        temp_2 = self.my_decoder_1(temp_3, output_enc_1)
+        temp_1 = self.my_decoder_2(temp_2, output_enc_0)
+        temp_0 = self.outConv(temp_1)
 
         # print(tmp_3.shape, tmp_2.shape, tmp_1.shape, tmp_0.shape)
         # torch.Size([20, 196, 384])
@@ -682,13 +653,4 @@ class MaxViT_deformableLKAFormer(nn.Module):
         # torch.Size([20, 3136, 96])
         # torch.Size([20, 9, 224, 224])
 
-        return tmp_0
-
-
-if __name__ == "__main__":
-    input = torch.rand((2, 3, 224, 224)).cuda(0)
-
-    net = MaxViT_deformableLKAFormer().cuda(0)
-
-    output = net(input)
-    print("Out shape: " + str(output.shape))
+        return temp_0

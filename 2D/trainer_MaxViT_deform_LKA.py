@@ -35,7 +35,7 @@ def inference(model, testloader, args, test_save_path=None):
                                       test_save_path=test_save_path, case=case_name, z_spacing=args.z_spacing)
         metric_list += np.array(metric_i)
         logging.info(' idx %d case %s mean_dice %f mean_hd95 %f' % (
-        i_batch, case_name, np.mean(metric_i, axis=0)[0], np.mean(metric_i, axis=0)[1]))
+            i_batch, case_name, np.mean(metric_i, axis=0)[0], np.mean(metric_i, axis=0)[1]))
 
     metric_list = metric_list / len(testloader.dataset)
 
@@ -76,7 +76,11 @@ def trainer_synapse(args, model, snapshot_path):
     os.makedirs(os.path.join(snapshot_path, 'test'), exist_ok=True)
     test_save_path = os.path.join(snapshot_path, 'test')
 
-    log_filename = f'{snapshot_path}' + '/log_' + f'{args.model_name}' + '.txt'
+    current_datetime = datetime.datetime.now()
+    datetime_str = current_datetime.strftime('%Y-%m-%d %H:%M:%S')
+
+    log_filename = f'{snapshot_path}' + '/log_' + f'{args.model_name}' + '-' + datetime_str + '.txt'
+
     logging.basicConfig(filename=log_filename, level=logging.INFO,
                         format='[%(asctime)s.%(msecs)03d] %(message)s', datefmt='%H:%M:%S')
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
@@ -85,6 +89,7 @@ def trainer_synapse(args, model, snapshot_path):
     base_lr = args.base_lr
     num_classes = args.num_classes
     batch_size = args.batch_size * args.n_gpu
+    print(batch_size, "batch size")
     # max_iterations = args.max_iterations
 
     x_transforms = transforms.Compose([
@@ -112,6 +117,9 @@ def trainer_synapse(args, model, snapshot_path):
         model = nn.DataParallel(model)
 
     model.train()
+    for name, param in model.named_parameters():
+        if param.requires_grad and torch.sum(param.data) != 0:
+            logging.info(name)
 
     ce_loss = CrossEntropyLoss()
     dice_loss = DiceLoss(num_classes)
@@ -136,7 +144,9 @@ def trainer_synapse(args, model, snapshot_path):
             image_batch, label_batch = sampled_batch['image'], sampled_batch['label']
             # print("data shape---------", image_batch.shape, label_batch.shape)
             image_batch, label_batch = image_batch.cuda(), label_batch.squeeze(1).cuda()
+
             outputs = model(image_batch)
+            # print(outputs.shape, "------------------------out----------")
             # outputs = F.interpolate(outputs, size=label_batch.shape[1:], mode='bilinear', align_corners=False)
             loss_ce = ce_loss(outputs, label_batch[:].long())
             loss_dice = dice_loss(outputs, label_batch, softmax=True)
@@ -164,7 +174,7 @@ def trainer_synapse(args, model, snapshot_path):
                 acc_loss_ce = acc_loss_ce / 100
                 acc_loss_dc = acc_loss_dc / 100
                 logging.info('iteration %d : loss : %f, loss_ce: %f, loss_dice: %f' % (
-                iter_num, acc_loss, acc_loss_ce, acc_loss_dc))
+                    iter_num, acc_loss, acc_loss_ce, acc_loss_dc))
                 acc_loss = 0.0
                 acc_loss_ce = 0.0
                 acc_loss_dc = 0.0

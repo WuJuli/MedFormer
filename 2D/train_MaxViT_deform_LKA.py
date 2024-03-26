@@ -8,8 +8,8 @@ from pydoc import locate
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
-
-from networks.MaxViT_deform_LKA import  MaxViT_deformableLKAFormer
+torch.set_num_threads(2)
+from networks.MaxViT_deform_LKA import MaxViT_deformableLKAFormer
 from trainer_MaxViT_deform_LKA import trainer_synapse
 
 from fvcore.nn import FlopCountAnalysis
@@ -53,8 +53,8 @@ parser.add_argument(
     default="part",
     choices=["no", "full", "part"],
     help="no: no cache, "
-    "full: cache all data, "
-    "part: sharding the dataset into nonoverlapping pieces and only cache one piece",
+         "full: cache all data, "
+         "part: sharding the dataset into nonoverlapping pieces and only cache one piece",
 )
 parser.add_argument("--resume", help="resume from checkpoint")
 parser.add_argument("--accumulation-steps", type=int, help="gradient accumulation steps")
@@ -74,7 +74,6 @@ parser.add_argument("--throughput", action="store_true", help="Test throughput o
 
 args = parser.parse_args()
 
-
 if __name__ == "__main__":
     # setting device on GPU if available, else CPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -85,8 +84,8 @@ if __name__ == "__main__":
     if device.type == "cuda":
         print(torch.cuda.get_device_name(0))
         print("Memory Usage:")
-        print("Allocated:", round(torch.cuda.memory_allocated(0) / 1024**3, 1), "GB")
-        print("Cached:   ", round(torch.cuda.memory_reserved(0) / 1024**3, 1), "GB")
+        print("Allocated:", round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1), "GB")
+        print("Cached:   ", round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1), "GB")
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     if not args.deterministic:
         cudnn.benchmark = True
@@ -119,14 +118,15 @@ if __name__ == "__main__":
         os.makedirs(args.output_dir)
 
     net = MaxViT_deformableLKAFormer().cuda(0)
-    input = torch.rand((1,3,224,224)).cuda(0)
+
+    input = torch.rand((1, 3, 224, 224)).cuda(0)
     n_parameters = sum(p.numel() for p in net.parameters() if p.requires_grad)
     flops = FlopCountAnalysis(net, input)
     model_flops = flops.total()
     print(f"Total trainable parameters: {round(n_parameters * 1e-6, 2)} M")
     print(f"MAdds: {round(model_flops * 1e-9, 2)} G")
 
-    #sys.exit()
+    # sys.exit()
 
     trainer = {
         "Synapse": trainer_synapse,
