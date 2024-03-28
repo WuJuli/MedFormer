@@ -3,7 +3,7 @@ import torch.nn as nn
 from einops import rearrange
 from einops.layers.torch import Rearrange
 from torch.nn import functional as F
-from .decoder.U_decoder import MBConv
+from .decoder.U_decoder import MBConv, ScaleDeformConv, DilationDeformConv
 from networks.segformer import *
 # from segformer import *
 
@@ -269,14 +269,15 @@ class PatchMerging(nn.Module):
 
 
 class Up(nn.Module):
-    def __init__(self, in_channels, num=1, bilinear=True, linear=True):
+    def __init__(self, in_channels, pd=1, bilinear=True, linear=True):
         super(Up, self).__init__()
-        self.mb_conv = MBConv(in_channels, in_channels, downsample=False, pd=num)
+        self.linear = linear
+        self.sd_conv = ScaleDeformConv(in_channels=in_channels, kernel_size=(2 * pd + 1, 2 * pd + 1), padding=pd)
         if bilinear:
             self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         else:
             self.up = nn.ConvTranspose2d(in_channels, in_channels, kernel_size=2, stride=2)
-        self.linear = linear
+
         if linear:
             self.up_channel_1 = nn.Linear(in_channels, in_channels // 2, bias=False)
             self.up_channel_2 = nn.Linear(in_channels, in_channels // 2, bias=False)
@@ -292,6 +293,7 @@ class Up(nn.Module):
             x1 = self.conv1(x1)
 
         x = torch.cat([x2, x1], dim=1)
+        x = self.sd_conv(x)
 
         if self.linear:
             x = self.up_channel_2(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)  # b, h, w, c -> b, c, h, w
@@ -340,9 +342,9 @@ class MaxViT_Tiny_deformableLKAFormer(nn.Module):
             [512, 512, 512, 512, 512],
         ]  # [dim, out_dim, key_dim, value_dim, x2_dim]
 
-        self.my_decoder_0 = Up(in_channels=in_out_chan[3][0], num=1, bilinear=True, linear=True)
-        self.my_decoder_1 = Up(in_channels=in_out_chan[2][0], num=3, bilinear=True, linear=True)
-        self.my_decoder_2 = Up(in_channels=in_out_chan[1][0], num=5, bilinear=True, linear=True)
+        self.my_decoder_0 = Up(in_channels=in_out_chan[3][0], pd=1, bilinear=True, linear=True)
+        self.my_decoder_1 = Up(in_channels=in_out_chan[2][0], pd=2, bilinear=True, linear=True)
+        self.my_decoder_2 = Up(in_channels=in_out_chan[1][0], pd=3, bilinear=True, linear=True)
         self.outConv = OutConv(in_channels=in_out_chan[0][0], num_class=9)
 
     def forward(self, x):
@@ -381,9 +383,9 @@ class MaxViT_Small_deformableLKAFormer(nn.Module):
             [768, 768, 768, 768, 768],
         ]  # [dim, out_dim, key_dim, value_dim, x2_dim]
 
-        self.my_decoder_0 = Up(in_channels=in_out_chan[3][0], bilinear=False, linear=True)
-        self.my_decoder_1 = Up(in_channels=in_out_chan[2][0], bilinear=False, linear=True)
-        self.my_decoder_2 = Up(in_channels=in_out_chan[1][0], bilinear=False, linear=True)
+        self.my_decoder_0 = Up(in_channels=in_out_chan[3][0], bilinear=False, linear=False)
+        self.my_decoder_1 = Up(in_channels=in_out_chan[2][0], bilinear=False, linear=False)
+        self.my_decoder_2 = Up(in_channels=in_out_chan[1][0], bilinear=False, linear=False)
         self.outConv = OutConv(in_channels=in_out_chan[0][0], num_class=9)
 
     def forward(self, x):

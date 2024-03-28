@@ -5,6 +5,30 @@ from einops import rearrange, repeat
 from einops.layers.torch import Rearrange, Reduce
 
 
+class DilationDeformConv(nn.Sequential):
+    def __init__(self, in_channels, kernel_size=(3, 3), pad_d=1):
+        super(DilationDeformConv, self).__init__(
+            nn.Conv2d(in_channels, in_channels, 1),
+            nn.BatchNorm2d(in_channels),
+            nn.GELU(),
+            DeformConv(in_channels, kernel_size=kernel_size, padding=pad_d, groups=in_channels, dilation=pad_d),
+            nn.BatchNorm2d(in_channels),
+            nn.GELU(),
+        )
+
+
+class ScaleDeformConv(nn.Sequential):
+    def __init__(self, in_channels, kernel_size, padding):
+        super(ScaleDeformConv, self).__init__(
+            nn.Conv2d(in_channels, in_channels, 1),
+            nn.BatchNorm2d(in_channels),
+            nn.GELU(),
+            DeformConv(in_channels, kernel_size=kernel_size, padding=padding, groups=in_channels),
+            nn.BatchNorm2d(in_channels),
+            nn.GELU(),
+        )
+
+
 class DeformConv(nn.Module):
 
     def __init__(self, in_channels, groups, kernel_size=(3, 3), padding=1, stride=1, dilation=1, bias=True):
@@ -16,7 +40,7 @@ class DeformConv(nn.Module):
                                     padding=padding,
                                     stride=stride,
                                     dilation=dilation,
-                                    bias=True)
+                                    bias=bias)
 
         self.deform_conv = torchvision.ops.DeformConv2d(in_channels=in_channels,
                                                         out_channels=in_channels,
@@ -95,7 +119,7 @@ def MBConv(
         nn.Conv2d(dim_in, hidden_dim, 1),
         nn.BatchNorm2d(hidden_dim),
         nn.GELU(),
-        DeformConv(hidden_dim, kernel_size=(3, 3), padding=pd, groups=hidden_dim, dilation=pd),
+        nn.Conv2d(hidden_dim, hidden_dim, 3, stride=stride, padding=1, groups=hidden_dim),
         nn.BatchNorm2d(hidden_dim),
         nn.GELU(),
         SqueezeExcitation(hidden_dim, shrinkage_rate=shrinkage_rate),
@@ -109,11 +133,7 @@ def MBConv(
     return net
 
 
-# f = MBConv(
-#     64,
-#     128,
-#     downsample=False,
-# )
+# f = ScaleDeformConv(in_channels=64, kernel_size=(7, 7), padding=3)
 # x = torch.rand([4, 64, 56, 56])
 # y = f(x)
 # print(y.shape)
