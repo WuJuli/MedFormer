@@ -1,4 +1,5 @@
 import argparse
+import itertools
 import logging
 import os
 import random
@@ -17,10 +18,28 @@ from torchvision import transforms
 from utils import test_single_volume
 from torch.nn import functional as F
 from datasets.dataset_synapse import Synapse_dataset, RandomGenerator
-
+import torch.nn.init as init
 import matplotlib.pyplot as plt
 import pandas as pd
 import datetime
+
+
+class MultiLossLayer(nn.Module):
+    def __init__(self, loss_list):
+        super(MultiLossLayer, self).__init__()
+        self.loss_list = loss_list
+        self.sigmas_sq = nn.ParameterList([nn.Parameter(torch.rand(1) * 0.8 + 0.2) for _ in range(len(self.loss_list))])
+
+    def forward(self, outputs, labels):
+        total_loss = 0.0
+        # self.sigmas_sq = self.sigmas_sq.to(outputs.device)
+        for i, loss_fn in enumerate(self.loss_list):
+            if isinstance(loss_fn, nn.CrossEntropyLoss):
+                labels = labels[:].long()
+            current_loss = loss_fn(outputs, labels)
+            factor = 1.0 / (2.0 * self.sigmas_sq[i])
+            total_loss += current_loss * factor + torch.log(self.sigmas_sq[i])
+        return total_loss.squeeze()
 
 
 def inference(model, testloader, args, test_save_path=None):
@@ -116,14 +135,19 @@ def trainer_synapse(args, model, snapshot_path):
     if args.n_gpu > 1:
         model = nn.DataParallel(model)
 
-    model.train()
-    for name, param in model.named_parameters():
-        if param.requires_grad and torch.sum(param.data) != 0:
-            logging.info(name)
-
     ce_loss = CrossEntropyLoss()
     dice_loss = DiceLoss(num_classes)
+    multi_loss = MultiLossLayer([ce_loss, dice_loss]).cuda(0)
+
+    for idx, param in enumerate(multi_loss.parameters()):
+        setattr(model, f"multi_loss_param_{idx}", param)
+
     optimizer = optim.SGD(model.parameters(), lr=base_lr, momentum=0.9, weight_decay=0.0001)
+    model.train()
+    logging.info("Trainable parameters:")
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            logging.info(f"{name}: {param.size()}")
     # optimizer = optim.AdamW(model.parameters(),lr=base_lr, weight_decay=0.0001)
     writer = SummaryWriter(snapshot_path + '/log')
     iter_num = 0
@@ -146,12 +170,13 @@ def trainer_synapse(args, model, snapshot_path):
             image_batch, label_batch = image_batch.cuda(), label_batch.squeeze(1).cuda()
 
             outputs = model(image_batch)
-            # print(outputs.shape, "------------------------out----------")
-            # outputs = F.interpolate(outputs, size=label_batch.shape[1:], mode='bilinear', align_corners=False)
-            loss_ce = ce_loss(outputs, label_batch[:].long())
-            loss_dice = dice_loss(outputs, label_batch, softmax=True)
-            loss = 0.4 * loss_ce + 0.6 * loss_dice
-            # print("loss-----------", loss)
+            # print(model.multi_loss_param_0)
+            # print(outputs.shape, label_batch.shape, outputs.device, label_batch.device)
+            loss = multi_loss(outputs, label_batch)
+            # loss_ce = ce_loss(outputs, label_batch[:].long())
+            # loss_dice = dice_loss(outputs, label_batch, softmax=True)
+            # loss = 0.4 * loss_ce + 0.6 * loss_dice
+            # print(loss.shape, loss.item(), loss.min().item(), loss.max().item())
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -163,21 +188,21 @@ def trainer_synapse(args, model, snapshot_path):
             iter_num = iter_num + 1
             writer.add_scalar('info/lr', lr_, iter_num)
             writer.add_scalar('info/total_loss', loss, iter_num)
-            writer.add_scalar('info/loss_ce', loss_ce, iter_num)
-            writer.add_scalar('info/loss_dice', loss_dice, iter_num)
+            # writer.add_scalar('info/loss_ce', loss_ce, iter_num)
+            # writer.add_scalar('info/loss_dice', loss_dice, iter_num)
 
             acc_loss += loss.item()
-            acc_loss_dc += loss_dice.item()
-            acc_loss_ce += loss_ce.item()
+            # acc_loss_dc += loss_dice.item()
+            # acc_loss_ce += loss_ce.item()
             if iter_num % 100 == 0:
                 acc_loss = acc_loss / 100
-                acc_loss_ce = acc_loss_ce / 100
-                acc_loss_dc = acc_loss_dc / 100
-                logging.info('iteration %d : loss : %f, loss_ce: %f, loss_dice: %f' % (
-                    iter_num, acc_loss, acc_loss_ce, acc_loss_dc))
+                # acc_loss_ce = acc_loss_ce / 100
+                # acc_loss_dc = acc_loss_dc / 100
+                logging.info('iteration %d : loss : %f' % (
+                    iter_num, acc_loss))
                 acc_loss = 0.0
-                acc_loss_ce = 0.0
-                acc_loss_dc = 0.0
+                # acc_loss_ce = 0.0
+                # acc_loss_dc = 0.0
 
             if iter_num % 100 == 0:
                 image = image_batch[1, 0:1, :, :]

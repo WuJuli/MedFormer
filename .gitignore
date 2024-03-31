@@ -4,9 +4,12 @@
 *.csv
 *.nii.gz
 *.npz
+*.npy
 *.txt
 *.pth
 *.log
+*.png
+*.jpg
 #3D
 DATASET_Acdc/
 3D/DATASET/
@@ -18,15 +21,14 @@ DATASET_Acdc.zip
 3D/pancreas_code/model/
 
 #2D
-2D/pretrained_models/
-2D/pretrained_pth/*
-2D/visualization/
-2D/skin_code/ISIC2017
-2D/skin_code/ISIC2018
-2D/skin_code/PH2
-2D/model_out
-2D/data/**
-2D/model_out/**
+2D/abdomen/data/**
+2D/abdomen/model_out/**
+2D/abdomen/pretrained_pth/*
+
+2D/skin/check_results/**
+2D/skin/model_out/**
+2D/skin/pretrained_pth/*
+
 #general
 model_zoo/
 __pycache__/

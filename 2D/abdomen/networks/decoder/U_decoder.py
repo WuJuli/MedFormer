@@ -6,7 +6,7 @@ from einops.layers.torch import Rearrange, Reduce
 
 
 class DilationDeformConv(nn.Sequential):
-    def __init__(self, in_channels, kernel_size=(3, 3), pad_d=1):
+    def __init__(self, in_channels, pad_d, kernel_size=(3, 3)):
         super(DilationDeformConv, self).__init__(
             nn.Conv2d(in_channels, in_channels, 1),
             nn.BatchNorm2d(in_channels),
