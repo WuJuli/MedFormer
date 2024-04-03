@@ -49,7 +49,6 @@ parser.add_argument('--is_pretrain', type=bool,
                     default=False, help='Use pretrained backbone')
 args = parser.parse_args()
 
-
 ## Loader
 ## Hyper parameters
 input_channels = 3
@@ -79,10 +78,11 @@ dataset_config = {
 args.num_classes = 1
 args.root_path = ''
 args.list_dir = ''
-args.exp = 'MaxViT_' + dataset_name + '_' +str(args.img_size)
+args.exp = 'MaxViT_' + dataset_name + '_' + str(args.img_size)
 snapshot_path = "./model_out/model_results/{}/{}".format(args.exp, 'model')
 snapshot_path = snapshot_path + '_pretrain' if args.is_pretrain else snapshot_path
-snapshot_path = snapshot_path + '_' + str(args.max_iterations)[0:2] + 'k' if args.max_iterations != 30000 else snapshot_path
+snapshot_path = snapshot_path + '_' + str(args.max_iterations)[
+                                      0:2] + 'k' if args.max_iterations != 30000 else snapshot_path
 snapshot_path = snapshot_path + '_epo' + str(args.max_epochs) if args.max_epochs != 30 else snapshot_path
 snapshot_path = snapshot_path + '_bs' + str(args.batch_size)
 snapshot_path = snapshot_path + '_lr' + str(args.base_lr)
@@ -96,7 +96,7 @@ print("Batch size: {}".format(args.batch_size))
 if not os.path.exists(snapshot_path):
     os.makedirs(snapshot_path)
 
-Net =  MaxViT_Tiny_deformableLKAFormer().to(device)
+Net = MaxViT_Tiny_deformableLKAFormer().to(device)
 
 optimizer = optim.SGD(Net.parameters(), lr=args.base_lr, momentum=0.9, weight_decay=0.0001)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=10)
