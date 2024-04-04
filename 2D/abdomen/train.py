@@ -24,13 +24,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--root_path",
     type=str,
-    default="/home/leon/repos/LeonsStuff/data/Synapse/train_npz",
+    default="./data/Synapse/train_npz",
     help="root dir for train data",
 )
 parser.add_argument(
     "--test_path",
     type=str,
-    default="/home/leon/repos/LeonsStuff/data/Synapse/test_vol_h5",
+    default="./data/Synapse/test_vol_h5",
     help="root dir for test data",
 )
 parser.add_argument("--model", type=str, help="encoder type", required=True)
@@ -40,13 +40,12 @@ parser.add_argument("--pretrain", type=str, help="using pretrained weights or no
 parser.add_argument("--dataset", type=str, default="Synapse", help="experiment_name")
 parser.add_argument("--list_dir", type=str, default="./lists/lists_Synapse", help="list dir")
 parser.add_argument("--num_classes", type=int, default=9, help="output channel of network")
-parser.add_argument("--output_dir", type=str, default="./model_out/MaxViT_deform_LKA_two_layer", help="output dir")
+parser.add_argument("--output_dir", type=str, default="./model_out/test", help="output dir")
 parser.add_argument("--max_iterations", type=int, default=90000, help="maximum epoch number to train")
 parser.add_argument("--max_epochs", type=int, default=400, help="maximum epoch number to train")
 parser.add_argument("--batch_size", type=int, default=24, help="batch_size per gpu")
 parser.add_argument("--num_workers", type=int, default=8, help="num_workers")
 parser.add_argument("--eval_interval", type=int, default=20, help="eval_interval")
-parser.add_argument("--model_name", type=str, default="MaxViT_deform_LKA", help="model_name")
 parser.add_argument("--n_gpu", type=int, default=1, help="total gpu")
 parser.add_argument("--deterministic", type=int, default=1, help="whether to use deterministic training")
 parser.add_argument("--base_lr", type=float, default=0.05, help="segmentation network base learning rate")
@@ -125,14 +124,7 @@ if __name__ == "__main__":
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-    net = MedFormer(model_type=args.model, model_scale=args.scale, pretrain=pretrain, num_classes=args.num_classes).cuda(0)
-
-    input = torch.rand((1, 3, 224, 224)).cuda(0)
-    n_parameters = sum(p.numel() for p in net.parameters() if p.requires_grad)
-    flops = FlopCountAnalysis(net, input)
-    model_flops = flops.total()
-    print(f"Total trainable parameters: {round(n_parameters * 1e-6, 2)} M")
-    print(f"MAdds: {round(model_flops * 1e-9, 2)} G")
+    net = MedFormer(model_type=args.model, model_scale=args.scale, pretrain=pretrain, num_classes=args.num_classes).to(device=device)
 
     # sys.exit()
 

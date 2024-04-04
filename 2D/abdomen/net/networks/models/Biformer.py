@@ -286,7 +286,7 @@ class BiFormer(nn.Module):
             x = self.stages[i](x)
         
             if i == len(self.stages) - 1:
-                features.append(self.norm(x))
+                features.append(self.pre_logits(self.norm(x)))
             else:
                 features.append(x)
 
