@@ -17,7 +17,7 @@ from torchvision import transforms
 from utils import test_single_volume
 from torch.nn import functional as F
 from datasets.dataset_synapse import Synapse_dataset, RandomGenerator
-
+from fvcore.nn import FlopCountAnalysis
 import matplotlib.pyplot as plt
 import pandas as pd
 import datetime
@@ -58,16 +58,16 @@ def plot_result(dice, h, snapshot_path, args):
     resolution_value = 1200
     plt.title('Mean Dice')
     date_and_time = datetime.datetime.now()
-    filename = f'{args.model_name}_' + str(date_and_time) + 'dice' + '.png'
+    filename = f'{args.model}_{args.scale}-' + str(date_and_time) + 'dice' + '.png'
     save_mode_path = os.path.join(snapshot_path, filename)
     plt.savefig(save_mode_path, format="png", dpi=resolution_value)
     plt.figure(1)
     df['mean_hd95'].plot()
     plt.title('Mean hd95')
-    filename = f'{args.model_name}_' + str(date_and_time) + 'hd95' + '.png'
+    filename = f'{args.model}_{args.scale}-' + str(date_and_time) + 'hd95' + '.png'
     save_mode_path = os.path.join(snapshot_path, filename)
     # save csv
-    filename = f'{args.model_name}_' + str(date_and_time) + 'results' + '.csv'
+    filename = f'{args.model}_{args.scale}-' + str(date_and_time) + 'results' + '.csv'
     save_mode_path = os.path.join(snapshot_path, filename)
     df.to_csv(save_mode_path, sep='\t')
 
@@ -79,12 +79,21 @@ def trainer_synapse(args, model, snapshot_path):
     current_datetime = datetime.datetime.now()
     datetime_str = current_datetime.strftime('%Y-%m-%d %H:%M:%S')
 
-    log_filename = f'{snapshot_path}' + '/log_' + f'{args.model_name}' + '-' + datetime_str + '.txt'
+    log_filename = f'{snapshot_path}' + '/log_' + f'{args.model}_{args.scale}' + '-' + datetime_str + '.txt'
 
     logging.basicConfig(filename=log_filename, level=logging.INFO,
                         format='[%(asctime)s.%(msecs)03d] %(message)s', datefmt='%H:%M:%S')
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
     logging.info(str(args))
+
+    input = torch.rand((1, 3, 224, 224)).cuda()
+    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    flops = FlopCountAnalysis(model, input)
+    model_flops = flops.total()
+    logging.info(f"Total trainable parameters: {round(n_parameters * 1e-6, 2)} M")
+    logging.info(f"MAdds: {round(model_flops * 1e-9, 2)} G")
+
+
 
     base_lr = args.base_lr
     num_classes = args.num_classes
@@ -117,9 +126,9 @@ def trainer_synapse(args, model, snapshot_path):
         model = nn.DataParallel(model)
 
     model.train()
-    # for name, param in model.named_parameters():
-    #     if param.requires_grad and torch.sum(param.data) != 0:
-    #         logging.info(name)
+    for name, param in model.named_parameters():
+        if param.requires_grad and torch.sum(param.data) != 0:
+            logging.info(name)
 
     ce_loss = CrossEntropyLoss()
     dice_loss = DiceLoss(num_classes)
@@ -191,7 +200,7 @@ def trainer_synapse(args, model, snapshot_path):
         # Test
         eval_interval = args.eval_interval
         if (epoch_num + 1) % eval_interval == 0:
-            filename = f'{args.model_name}_seed_{args.seed}_epoch_{epoch_num}.pth'
+            filename = f'{args.model}_{args.scale}_seed_{args.seed}_epoch_{epoch_num}.pth'
             save_mode_path = os.path.join(snapshot_path, filename)
             torch.save(model.state_dict(), save_mode_path)
             logging.info("save model to {}".format(save_mode_path))
@@ -205,7 +214,7 @@ def trainer_synapse(args, model, snapshot_path):
             model.train()
 
         if epoch_num >= max_epoch - 1:
-            filename = f'{args.model_name}_seed_{args.seed}_epoch_{epoch_num}.pth'
+            filename = f'{args.model}_{args.scale}_seed_{args.seed}_epoch_{epoch_num}.pth'
             save_mode_path = os.path.join(snapshot_path, filename)
             torch.save(model.state_dict(), save_mode_path)
             logging.info("save model to {}".format(save_mode_path))

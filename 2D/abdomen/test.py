@@ -12,8 +12,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from datasets.dataset_synapse import Synapse_dataset
-from networks.MaxViT_deform_LKA import  MaxViT_deformableLKAFormer
-from trainer_MaxViT_deform_LKA import trainer_synapse
+from net.LightDCN import MedFormer
+
 from utils import test_single_volume
 
 parser = argparse.ArgumentParser()
@@ -132,7 +132,7 @@ if __name__ == "__main__":
     args.z_spacing = dataset_config[dataset_name]["z_spacing"]
     args.is_pretrain = True
 
-    net = MaxViT_deformableLKAFormer(num_classes=args.num_classes).cuda(0)
+    net = MedFormer
 
     snapshot = os.path.join(args.output_dir, "best_model.pth")
     if not os.path.exists(snapshot):
