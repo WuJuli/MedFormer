@@ -84,36 +84,55 @@ class OutConv(nn.Module):
 
 ##########################################
 #
-# MaxViT stuff
+# Network
 #
 ##########################################
-# from merit_lib.networks import MaxViT4Out_Small, MaxViT4Out_Small3D
-from .networks.models.backbone import MaxViT_Out, Biformer_Out, ConvNext_Out, HorNet_Out, InceptionNext_Out, RepViT_Out, \
+
+from .networks.models.backbone import MaxViT_Out, Biformer_Out, ConvNeXt_Out, HorNet_Out, InceptionNext_Out, RepViT_Out, \
     SwinTransformer_Out
 
 
-class MaxViT_Tiny_deformableLKAFormer(nn.Module):
-    def __init__(self, num_classes=9, head_count=1, token_mlp_mode="mix_skip"):
+class MedFormer(nn.Module):
+    def __init__(self, model_type, model_scale, pretrain, num_classes=9):
         super().__init__()
 
-        # Encoder pretrained tiny
-        # self.encoder = RepViT_Out(n_class=num_classes, model_scale='m15e', pretrain=False)
-        # self.encoder = MaxViT_Out(n_class=num_classes, model_scale='tiny', pretrain=True)
-        # self.encoder = HorNet_Out(n_class=num_classes, model_scale='tiny-gf', pretrain=False)
-        # self.encoder = Biformer_Out(n_class=num_classes, model_scale='small')
-
-        # Decoder
-        in_out_chan = [
+        # Decoder dim
+        in_out_chan_tiny = [
             [64, 64, 64, 64, 64],
             [128, 128, 128, 128, 128],
             [256, 256, 256, 256, 256],
             [512, 512, 512, 512, 512],
         ]  # [dim, out_dim, key_dim, value_dim, x2_dim]
 
-        self.my_decoder_0 = Up(in_channels=in_out_chan[3][0], pd=1, bilinear=True, linear=True)
-        self.my_decoder_1 = Up(in_channels=in_out_chan[2][0], pd=2, bilinear=True, linear=True)
-        self.my_decoder_2 = Up(in_channels=in_out_chan[1][0], pd=3, bilinear=True, linear=True)
-        self.outConv = OutConv(in_channels=in_out_chan[0][0], num_class=9)
+        in_out_chan_small = [
+            [96, 96, 96, 96, 96],
+            [192, 192, 192, 192, 192],
+            [384, 384, 384, 384, 384],
+            [768, 768, 768, 768, 768],
+        ]  # [dim, out_dim, key_dim, value_dim, x2_dim]
+
+        models_dict = {
+            'maxxvit': (MaxViT_Out, {'tiny': in_out_chan_tiny, 'small': in_out_chan_small}),
+            'biformer': (Biformer_Out, {'tiny': in_out_chan_tiny, 'small': in_out_chan_tiny, 'base': in_out_chan_small}),
+            'convnext': (ConvNeXt_Out, {'all': in_out_chan_small}),
+            'hornet': (HorNet_Out, {'tiny-7': in_out_chan_tiny, 'tiny-gf': in_out_chan_tiny,
+                                    'small-7': in_out_chan_small, 'small-gf': in_out_chan_small}),
+            'inception': (InceptionNext_Out, {'all': in_out_chan_small}),
+            'repvit': (RepViT_Out, {'all': in_out_chan_tiny}),
+            'swintrans': (SwinTransformer_Out, {'all': in_out_chan_small})
+        }
+
+        if model_type not in models_dict:
+            raise ValueError("Invalid model_type")
+
+        encoder_cls, scale_dict = models_dict[model_type]
+        self.encoder = encoder_cls(model_scale=model_scale, pretrain=pretrain)
+        self.in_out_chan = scale_dict.get(model_scale, scale_dict.get('all'))
+
+        self.my_decoder_0 = Up(in_channels=self.in_out_chan[3][0], pd=1, bilinear=True, linear=True)
+        self.my_decoder_1 = Up(in_channels=self.in_out_chan[2][0], pd=2, bilinear=True, linear=True)
+        self.my_decoder_2 = Up(in_channels=self.in_out_chan[1][0], pd=3, bilinear=True, linear=True)
+        self.outConv = OutConv(in_channels=self.in_out_chan[0][0], num_class=num_classes)
 
     def forward(self, x):
         # ---------------Encoder-------------------------
@@ -132,57 +151,5 @@ class MaxViT_Tiny_deformableLKAFormer(nn.Module):
         temp_0 = self.outConv(temp_1)
 
         # torch.Size([20, 256, 14, 14]) torch.Size([20, 128, 28, 28]) torch.Size([20, 64, 56, 56]) torch.Size([20, 9, 224, 224])
-
-        return temp_0
-
-
-class MaxViT_Small_deformableLKAFormer(nn.Module):
-    def __init__(self, model_type, model_scale, pretrain, num_classes=9, head_count=1, token_mlp_mode="mix_skip"):
-        super().__init__()
-
-        # Encoder
-        self.model_scale = model_scale
-        self.encoder = SwinTransformer_Out(n_class=num_classes, model_scale=model_scale,
-                                           pretrain=True)  # Swin Transformer only can be used here, model scale: tiny, small
-        # self.encoder = InceptionNext_Out(n_class=num_classes, model_scale='tiny', pretrain=True)
-        # self.encoder = HorNet_Out(n_class=num_classes,model_scale='small-7', pretrain=True)
-        # self.encoder = ConvNext_Out(n_class=num_classes, model_scale='small', pretrain=False)
-        # self.encoder = MaxViT_Out(n_class=num_classes, model_scale='small', pretrain=True)
-
-        # Decoder
-        in_out_chan = [
-            [96, 96, 96, 96, 96],
-            [192, 192, 192, 192, 192],
-            [384, 384, 384, 384, 384],
-            [768, 768, 768, 768, 768],
-        ]  # [dim, out_dim, key_dim, value_dim, x2_dim]
-
-        self.my_decoder_0 = Up(in_channels=in_out_chan[3][0], bilinear=False, linear=False)
-        self.my_decoder_1 = Up(in_channels=in_out_chan[2][0], bilinear=False, linear=False)
-        self.my_decoder_2 = Up(in_channels=in_out_chan[1][0], bilinear=False, linear=False)
-        self.outConv = OutConv(in_channels=in_out_chan[0][0], num_class=9)
-
-    def forward(self, x):
-        # ---------------Encoder-------------------------
-        if x.size()[1] == 1:
-            x = x.repeat(1, 3, 1, 1)
-
-        output_enc_3, output_enc_2, output_enc_1, output_enc_0 = self.encoder(x)
-
-        # print(output_enc_3.shape, output_enc_2.shape, output_enc_1.shape, output_enc_0.shape, "from encoder")
-        # print(
-        # "torch.Size([20, 768, 7, 7]) torch.Size([20, 384, 14, 14]) torch.Size([20, 192, 28, 28]) torch.Size([20, 96, 56, 56])")
-        # ---------------Decoder-------------------------
-        b, c, _, _ = output_enc_3.shape
-        temp_3 = self.my_decoder_0(output_enc_3, output_enc_2)
-        temp_2 = self.my_decoder_1(temp_3, output_enc_1)
-        temp_1 = self.my_decoder_2(temp_2, output_enc_0)
-        temp_0 = self.outConv(temp_1)
-
-        # print(tmp_3.shape, tmp_2.shape, tmp_1.shape, tmp_0.shape)
-        # torch.Size([20, 196, 384])
-        # torch.Size([20, 784, 192])
-        # torch.Size([20, 3136, 96])
-        # torch.Size([20, 9, 224, 224])
 
         return temp_0

@@ -12,7 +12,7 @@ import torch
 import torch.backends.cudnn as cudnn
 
 torch.set_num_threads(2)
-from net.LightDCN import MaxViT_Tiny_deformableLKAFormer, MaxViT_Small_deformableLKAFormer
+from net.LightDCN import MedFormer
 from trainer import trainer_synapse
 
 from fvcore.nn import FlopCountAnalysis
@@ -33,6 +33,10 @@ parser.add_argument(
     default="/home/leon/repos/LeonsStuff/data/Synapse/test_vol_h5",
     help="root dir for test data",
 )
+parser.add_argument("--model", type=str, help="encoder type", required=True)
+parser.add_argument("--scale", type=str, help="the scale of the encoder", required=True)
+parser.add_argument("--pretrain", type=str, help="using pretrained weights or not", choices=['True', 'False'], required=True)
+
 parser.add_argument("--dataset", type=str, default="Synapse", help="experiment_name")
 parser.add_argument("--list_dir", type=str, default="./lists/lists_Synapse", help="list dir")
 parser.add_argument("--num_classes", type=int, default=9, help="output channel of network")
@@ -101,6 +105,7 @@ if __name__ == "__main__":
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
+    pretrain = args.pretrain.lower() == 'true'
 
     dataset_name = args.dataset
     dataset_config = {
@@ -120,9 +125,7 @@ if __name__ == "__main__":
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-    net = MaxViT_Small_deformableLKAFormer().cuda(0)
-
-    # net = MaxViT_Tiny_deformableLKAFormer().cuda(0)
+    net = MedFormer(model_type=args.model, model_scale=args.scale, pretrain=pretrain, num_classes=args.num_classes).cuda(0)
 
     input = torch.rand((1, 3, 224, 224)).cuda(0)
     n_parameters = sum(p.numel() for p in net.parameters() if p.requires_grad)
