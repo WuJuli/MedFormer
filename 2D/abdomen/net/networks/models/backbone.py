@@ -271,7 +271,7 @@ def load_pretrained_weights(model_type, model_scale):
             backbone = maxvit_rmlp_small_rw_224()
             print('Loading:', 'Maxvit small')
             state_dict = torch.load(
-                '/Storage/share/wwrrgg/deformableLKA/2D/pretrained_pth/maxvit/maxvit_rmlp_small_rw_224_sw-6ef0ae4f.pth')
+                '/root/autodl-tmp/wwrrgg/MedFormer/2D/pretrain/maxvit_rmlp_small_rw_224_sw-6ef0ae4f.pth')
         else:
             sys.exit(
                 model_scale + " is not a valid model scale! Maxxvit currently supported model scales are 'tiny' and 'small'.")
@@ -281,12 +281,12 @@ def load_pretrained_weights(model_type, model_scale):
             backbone = convnext_tiny()
             print('Loading:', 'convnext tiny')
             state_dict = torch.load(
-                '/Storage/share/wwrrgg/deformableLKA/2D/pretrained_pth/ConvNeXt/convnext_tiny_1k_224.pth')
+                '/root/autodl-tmp/wwrrgg/MedFormer/2D/pretrain/convnext_tiny_1k_224.pth')
         elif model_scale == 'small':
             backbone = convnext_small()
             print('Loading:', 'convnext small')
             state_dict = torch.load(
-                '/Storage/share/wwrrgg/deformableLKA/2D/pretrained_pth/ConvNeXt/convnext_small_1k_224.pth')
+                '/root/autodl-tmp/wwrrgg/MedFormer/2D/pretrain/convnext_small_1k_224.pth')
         else:
             sys.exit(
                 model_scale + " is not a valid model scale! Convnext currently supported model scales are 'tiny' and 'small'.")
@@ -317,12 +317,12 @@ def load_pretrained_weights(model_type, model_scale):
             backbone = inception_next_tiny()
             print('Loading:', 'inceptionnext tiny')
             state_dict = torch.load(
-                '/Storage/share/wwrrgg/deformableLKA/2D/pretrained_pth/InceptionNeXt/inceptionnext_tiny.pth')
+                '/root/autodl-tmp/wwrrgg/MedFormer/2D/pretrain/inceptionnext_tiny.pth')
         elif model_scale == 'small':
             backbone = inception_next_small()
             print('Loading:', 'inceptionnext small')
             state_dict = torch.load(
-                '/Storage/share/wwrrgg/deformableLKA/2D/pretrained_pth/InceptionNeXt/inceptionnext_small.pth')
+                '/root/autodl-tmp/wwrrgg/MedFormer/2D/pretrain/inceptionnext_small.pth')
         else:
             sys.exit(
                 model_scale + " is not a valid model scale! Inceptionnext currently supported model scales are 'tiny' and 'small'.")
@@ -357,7 +357,7 @@ def load_pretrained_weights(model_type, model_scale):
             backbone = swin_tiny_patch4_window7_224()
             print('Loading:', 'swintransformer tiny')
             state_dict = torch.load(
-                '/Storage/share/wwrrgg/deformableLKA/2D/pretrained_pth/SwinTransformer/swin_tiny_patch4_window7_224.pth')
+                '/root/autodl-tmp/wwrrgg/MedFormer/2D/pretrain/swin_tiny_patch4_window7_224.pth')
         elif model_scale == 'small':
             backbone = swin_small_patch4_window7_224()
             print('Loading:', 'swintransformer small')

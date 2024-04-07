@@ -24,13 +24,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--root_path",
     type=str,
-    default="./data/Synapse/train_npz",
+    default="/root/autodl-tmp/dataset/Synapse/train_npz",
     help="root dir for train data",
 )
 parser.add_argument(
     "--test_path",
     type=str,
-    default="./data/Synapse/test_vol_h5",
+    default="/root/autodl-tmp/dataset/Synapse/test_vol_h5",
     help="root dir for test data",
 )
 parser.add_argument("--model", type=str, help="encoder type", required=True)
