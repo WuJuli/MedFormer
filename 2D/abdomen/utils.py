@@ -7,6 +7,8 @@ import SimpleITK as sitk
 from torch.nn import functional as F
 from torchvision import transforms
 
+from scipy.ndimage.morphology import distance_transform_edt as edt
+
 
 class DiceLoss(nn.Module):
     def __init__(self, n_classes):
@@ -34,10 +36,14 @@ class DiceLoss(nn.Module):
     def forward(self, inputs, target, weight=None, softmax=True):
         if softmax:
             inputs = torch.softmax(inputs, dim=1)
+
         target = self._one_hot_encoder(target)
+
         if weight is None:
             weight = [1] * self.n_classes
-        assert inputs.size() == target.size(), 'predict {} & target {} shape do not match'.format(inputs.size(), target.size())
+        assert inputs.size() == target.size(), 'predict {} & target {} shape do not match'.format(inputs.size(),
+                                                                                                  target.size())
+
         class_wise_dice = []
         loss = 0.0
         for i in range(0, self.n_classes):
@@ -47,14 +53,69 @@ class DiceLoss(nn.Module):
         return loss / self.n_classes
 
 
+class FuzzyRoughLoss(nn.Module):
+    def __init__(self, n_classes, alpha=1):
+        super(FuzzyRoughLoss, self).__init__()
+        self.alpha = alpha
+        self.n_classes = n_classes
+
+    def _one_hot_encoder(self, input_tensor):
+        tensor_list = []
+        for i in range(self.n_classes):
+            temp_prob = input_tensor == i  # * torch.ones_like(input_tensor)
+            tensor_list.append(temp_prob.unsqueeze(1))
+        output_tensor = torch.cat(tensor_list, dim=1)
+        return output_tensor.float()
+
+    @torch.no_grad()
+    def distance_field(self, img: np.ndarray) -> np.ndarray:
+        field = np.zeros_like(img)
+
+        for batch in range(len(img)):
+            fg_mask = img[batch] > 0.5
+
+            if fg_mask.any():
+                bg_mask = ~fg_mask
+
+                fg_dist = edt(fg_mask)
+                bg_dist = edt(bg_mask)
+
+                field[batch] = fg_dist + bg_dist
+
+        return 1 - np.exp(-(field ** 2) / self.alpha)
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor, softmax=True) -> torch.Tensor:
+        assert pred.dim() == 4 or pred.dim() == 5
+
+        if softmax:
+            pred = torch.softmax(pred, dim=1)
+
+        target = self._one_hot_encoder(target)
+        assert pred.dim() == target.dim()
+
+        target_dt = torch.from_numpy(self.distance_field(target.cpu().detach().numpy())).float().cuda()
+        pred_error = (pred - target) ** 2
+        distance = target_dt.cuda()
+
+        dt_field = pred_error * distance
+        nonzero = torch.nonzero(dt_field).size()
+
+        loss = 0.0
+        for i in range(self.n_classes):
+            class_loss = torch.sum(dt_field[:, i]) / nonzero[0]
+            loss += class_loss
+
+        return loss / self.n_classes
+
+
 def calculate_metric_percase(pred, gt):
     pred[pred > 0] = 1
     gt[gt > 0] = 1
-    if pred.sum() > 0 and gt.sum()>0:
+    if pred.sum() > 0 and gt.sum() > 0:
         dice = metric.binary.dc(pred, gt)
         hd95 = metric.binary.hd95(pred, gt)
         return dice, hd95
-    elif pred.sum() > 0 and gt.sum()==0:
+    elif pred.sum() > 0 and gt.sum() == 0:
         return 1, 0
     else:
         return 0, 0
@@ -104,7 +165,7 @@ def test_single_volume(image, label, net, classes, patch_size=[256, 256], test_s
         img_itk.SetSpacing((1, 1, z_spacing))
         prd_itk.SetSpacing((1, 1, z_spacing))
         lab_itk.SetSpacing((1, 1, z_spacing))
-        sitk.WriteImage(prd_itk, test_save_path + '/'+case + "_pred.nii.gz")
-        sitk.WriteImage(img_itk, test_save_path + '/'+ case + "_img.nii.gz")
-        sitk.WriteImage(lab_itk, test_save_path + '/'+ case + "_gt.nii.gz")
+        sitk.WriteImage(prd_itk, test_save_path + '/' + case + "_pred.nii.gz")
+        sitk.WriteImage(img_itk, test_save_path + '/' + case + "_img.nii.gz")
+        sitk.WriteImage(lab_itk, test_save_path + '/' + case + "_gt.nii.gz")
     return metric_list

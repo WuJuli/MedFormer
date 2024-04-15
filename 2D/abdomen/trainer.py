@@ -12,7 +12,7 @@ from tensorboardX import SummaryWriter
 from torch.nn.modules.loss import CrossEntropyLoss
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from utils import DiceLoss
+from utils import DiceLoss, FuzzyRoughLoss
 from torchvision import transforms
 from utils import test_single_volume
 from torch.nn import functional as F
@@ -93,8 +93,6 @@ def trainer_synapse(args, model, snapshot_path):
     logging.info(f"Total trainable parameters: {round(n_parameters * 1e-6, 2)} M")
     logging.info(f"MAdds: {round(model_flops * 1e-9, 2)} G")
 
-
-
     base_lr = args.base_lr
     num_classes = args.num_classes
     batch_size = args.batch_size * args.n_gpu
@@ -132,6 +130,7 @@ def trainer_synapse(args, model, snapshot_path):
 
     ce_loss = CrossEntropyLoss()
     dice_loss = DiceLoss(num_classes)
+    boundary_loss = FuzzyRoughLoss(num_classes)
     optimizer = optim.SGD(model.parameters(), lr=base_lr, momentum=0.9, weight_decay=0.0001)
     # optimizer = optim.AdamW(model.parameters(),lr=base_lr, weight_decay=0.0001)
     writer = SummaryWriter(snapshot_path + '/log')
@@ -155,11 +154,11 @@ def trainer_synapse(args, model, snapshot_path):
             image_batch, label_batch = image_batch.cuda(), label_batch.squeeze(1).cuda()
 
             outputs = model(image_batch)
-            # print(outputs.shape, "------------------------out----------")
             # outputs = F.interpolate(outputs, size=label_batch.shape[1:], mode='bilinear', align_corners=False)
             loss_ce = ce_loss(outputs, label_batch[:].long())
             loss_dice = dice_loss(outputs, label_batch, softmax=True)
-            loss = 0.4 * loss_ce + 0.6 * loss_dice
+            loss_binary = boundary_loss(outputs, label_batch)
+            loss = 0.4 * loss_ce + 0.6 * loss_dice + 0.2 * loss_binary
             # print("loss-----------", loss)
             optimizer.zero_grad()
             loss.backward()
