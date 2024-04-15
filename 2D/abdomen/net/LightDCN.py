@@ -111,6 +111,13 @@ class MedFormer(nn.Module):
             [768, 768, 768, 768, 768],
         ]  # [dim, out_dim, key_dim, value_dim, x2_dim]
 
+        in_out_chan_repvit_m23 = [
+            [80, 80, 80, 80],
+            [160, 160, 160, 160],
+            [320, 320, 320, 320],
+            [640, 640, 640, 640],
+        ]
+
         models_dict = {
             'maxxvit': (MaxViT_Out, {'tiny': in_out_chan_tiny, 'small': in_out_chan_small}),
             'biformer': (Biformer_Out, {'tiny': in_out_chan_tiny, 'small': in_out_chan_tiny, 'base': in_out_chan_small}),
@@ -118,7 +125,7 @@ class MedFormer(nn.Module):
             'hornet': (HorNet_Out, {'tiny-7': in_out_chan_tiny, 'tiny-gf': in_out_chan_tiny,
                                     'small-7': in_out_chan_small, 'small-gf': in_out_chan_small}),
             'inception': (InceptionNext_Out, {'all': in_out_chan_small}),
-            'repvit': (RepViT_Out, {'all': in_out_chan_tiny}),
+            'repvit': (RepViT_Out, {'m1_1': in_out_chan_tiny, 'm1_5': in_out_chan_tiny, 'm2_3': in_out_chan_repvit_m23}),
             'swintrans': (SwinTransformer_Out, {'all': in_out_chan_small})
         }
 

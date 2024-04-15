@@ -190,7 +190,7 @@ class InceptionNext_Out(nn.Module):
         return f[3], f[2], f[1], f[0]
 
 
-from .RepViT import repvit_m1_1, repvit_m1_5
+from .RepViT import repvit_m1_1, repvit_m1_5, repvit_m2_3
 
 
 class RepViT_Out(nn.Module):
@@ -206,12 +206,15 @@ class RepViT_Out(nn.Module):
         if pretrain:
             self.backbone = load_pretrained_weights('repvit', model_scale)
         else:
-            if model_scale == 'm11-300e' or model_scale == 'm11-450e':
+            if model_scale == 'm1_1':
                 print('no pretrain repvit m1 1')
                 self.backbone = repvit_m1_1()
-            elif model_scale == 'm15-300e' or model_scale == 'm15-450e':
+            elif model_scale == 'm1_5':
                 print('no pretrain repvit m1 5')
                 self.backbone = repvit_m1_5()
+            elif model_scale == 'm2_3':
+                print('no pretrain repvit m2 3')
+                self.backbone = repvit_m2_3()
             else:
                 sys.exit(model_scale + " is not a valid model scale !")
 
@@ -328,29 +331,24 @@ def load_pretrained_weights(model_type, model_scale):
                 model_scale + " is not a valid model scale! Inceptionnext currently supported model scales are 'tiny' and 'small'.")
 
     elif model_type == 'repvit':
-        if model_scale == 'm11-300e':
-            backbone = repvit_m1_1()
-            print('Loading:', 'repvit m11-300e')
-            state_dict = torch.load(
-                '/Storage/share/wwrrgg/deformableLKA/2D/pretrained_pth/RepViT/repvit_m1_1_distill_300e.pth')
-        elif model_scale == 'm11-450e':
+        if model_scale == 'm1_1':
             backbone = repvit_m1_1()
             print('Loading:', 'repvit m11-450e')
             state_dict = torch.load(
                 '/Storage/share/wwrrgg/deformableLKA/2D/pretrained_pth/RepViT/repvit_m1_1_distill_450e.pth')
-        elif model_scale == 'm15-300e':
-            backbone = repvit_m1_5()
-            print('Loading:', 'repvit m15-300e')
-            state_dict = torch.load(
-                '/Storage/share/wwrrgg/deformableLKA/2D/pretrained_pth/RepViT/repvit_m1_5_distill_300e.pth')
-        elif model_scale == 'm15-450e':
+        elif model_scale == 'm1_5':
             backbone = repvit_m1_5()
             print('Loading:', 'repvit m15-450e')
             state_dict = torch.load(
                 '/Storage/share/wwrrgg/deformableLKA/2D/pretrained_pth/RepViT/repvit_m1_5_distill_450e.pth')
+        elif model_scale == 'm2_3':
+            backbone = repvit_m2_3()
+            print('Loading:', 'repvit m23')
+            state_dict = torch.load(
+                '/Storage/share/wwrrgg/deformableLKA/2D/pretrained_pth/RepViT/repvit_m2_3_ade20k.pth')
         else:
             sys.exit(
-                model_scale + " is not a valid model scale! Repvit currently supported model scales are 'm11-300e' , 'm11-450e', 'm15-300e', 'm15-450e'.")
+                model_scale + " is not a valid model scale! Repvit currently supported model scales are 'm1_1' , 'm1_5', 'm2_3'.")
 
     elif model_type == 'swintrans':
         if model_scale == 'tiny':
