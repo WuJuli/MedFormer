@@ -199,34 +199,38 @@ def trainer_synapse(args, model, snapshot_path):
 
         # Test
         eval_interval = args.eval_interval
+        best_mean_dice = 0.0
+        best_epoch = -1
         if (epoch_num + 1) % eval_interval == 0:
-            filename = f'{args.model}_{args.scale}_seed_{args.seed}_epoch_{epoch_num}.pth'
+            filename = f'{args.model}_{args.scale}_seed_{args.seed}.pth'
             save_mode_path = os.path.join(snapshot_path, filename)
-            torch.save(model.state_dict(), save_mode_path)
-            logging.info("save model to {}".format(save_mode_path))
 
-            logging.info("*" * 20)
-            logging.info(f"Running Inference after epoch {epoch_num}")
-            print(f"Epoch {epoch_num}")
             mean_dice, mean_hd95 = inference(model, testloader, args, test_save_path=test_save_path)
             dice_.append(mean_dice)
             hd95_.append(mean_hd95)
+            
+            if mean_dice > best_mean_dice:
+                best_mean_dice = mean_dice
+                best_epoch = epoch_num
+                torch.save(model.state_dict(), save_mode_path)
+                logging.info(f"New best model saved to {save_mode_path} with mean_dice {mean_dice:.4f} at epoch" + str(best_epoch))
             model.train()
-
+        
         if epoch_num >= max_epoch - 1:
+            
             filename = f'{args.model}_{args.scale}_seed_{args.seed}_epoch_{epoch_num}.pth'
             save_mode_path = os.path.join(snapshot_path, filename)
-            torch.save(model.state_dict(), save_mode_path)
-            logging.info("save model to {}".format(save_mode_path))
 
-            if not (epoch_num + 1) % args.eval_interval == 0:
-                logging.info("*" * 20)
-                logging.info(f"Running Inference after epoch {epoch_num} (Last Epoch)")
-                print(f"Epoch {epoch_num}, Last Epcoh")
-                mean_dice, mean_hd95 = inference(model, testloader, args, test_save_path=test_save_path)
-                dice_.append(mean_dice)
-                hd95_.append(mean_hd95)
-                model.train()
+            mean_dice, mean_hd95 = inference(model, testloader, args, test_save_path=test_save_path)
+            dice_.append(mean_dice)
+            hd95_.append(mean_hd95)
+            
+            if mean_dice > best_mean_dice:
+                best_mean_dice = mean_dice
+                best_epoch = epoch_num
+                torch.save(model.state_dict(), save_mode_path)
+                logging.info(f"New best model saved to {save_mode_path} with mean_dice {mean_dice:.4f} at epoch" + best_epoch)
+            model.train()
 
             iterator.close()
             break
