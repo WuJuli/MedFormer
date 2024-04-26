@@ -99,7 +99,7 @@ class ConvNeXt_Out(nn.Module):
                 print('no pretrain convnext tiny')
                 self.backbone = convnext_tiny()
             elif model_scale == 'small':
-                print('no pretrain convnext tiny')
+                print('no pretrain convnext small')
                 self.backbone = convnext_small()
             else:
                 sys.exit(model_scale + " is not a valid model scale !")
