@@ -34,7 +34,7 @@ class FinalPatchExpand(nn.Module):
 
 
 class Up(nn.Module):
-    def __init__(self, in_channels, pd=1, bilinear=True, linear=True):
+    def __init__(self, in_channels, pd, bilinear=True, linear=True):
         super(Up, self).__init__()
         self.linear = linear
         self.sd_conv = ScaleDeformConv(in_channels=in_channels, kernel_size=(2 * pd + 1, 2 * pd + 1), padding=pd)
@@ -118,6 +118,8 @@ class MedFormer(nn.Module):
             [640, 640, 640, 640],
         ]
 
+        kernel_padding = [3, 2, 1]
+
         models_dict = {
             'maxxvit': (MaxViT_Out, {'tiny': in_out_chan_tiny, 'small': in_out_chan_small}),
             'biformer': (Biformer_Out, {'tiny': in_out_chan_tiny, 'small': in_out_chan_tiny, 'base': in_out_chan_small}),
@@ -136,9 +138,9 @@ class MedFormer(nn.Module):
         self.encoder = encoder_cls(model_scale=model_scale, pretrain=pretrain)
         self.in_out_chan = scale_dict.get(model_scale, scale_dict.get('all'))
 
-        self.my_decoder_0 = Up(in_channels=self.in_out_chan[3][0], pd=1, bilinear=True, linear=True)
-        self.my_decoder_1 = Up(in_channels=self.in_out_chan[2][0], pd=2, bilinear=True, linear=True)
-        self.my_decoder_2 = Up(in_channels=self.in_out_chan[1][0], pd=3, bilinear=True, linear=True)
+        self.my_decoder_0 = Up(in_channels=self.in_out_chan[3][0], pd=kernel_padding[0], bilinear=True, linear=True)
+        self.my_decoder_1 = Up(in_channels=self.in_out_chan[2][0], pd=kernel_padding[1], bilinear=True, linear=True)
+        self.my_decoder_2 = Up(in_channels=self.in_out_chan[1][0], pd=kernel_padding[2], bilinear=True, linear=True)
         self.outConv = OutConv(in_channels=self.in_out_chan[0][0], num_class=num_classes)
 
     def forward(self, x):
